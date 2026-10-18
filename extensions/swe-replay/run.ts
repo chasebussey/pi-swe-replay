@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { trackTurnFiles } from "./track-turn-files";
 
 interface SweReplayRequest {
   n: number;
@@ -42,9 +43,9 @@ export async function runSweReplay(
 
   const rootEntryId = rootEntry.id;
 
-  await sendPromptAndWaitForSettlement(pi, prompt);
+  await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, 1);
 
-  for (let i = 1; i <= n; i++) {
+  for (let i = 2; i <= n; i++) {
     const explore = Math.random() < 0.5;
 
     if (explore) {
@@ -55,7 +56,7 @@ export async function runSweReplay(
       }
 
       // Make a fresh trajectory and wait for it to settle before navigating again.
-      await sendPromptAndWaitForSettlement(pi, prompt);
+      await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i);
     }
     else {
       pi.appendEntry("swe-replay-exploit-log")
@@ -73,16 +74,28 @@ export async function runSweReplay(
  * fire-and-forget: calling ctx.waitForIdle() immediately after it can observe
  * the brief pre-start idle state and return too early.
  */
-async function sendPromptAndWaitForSettlement(pi: ExtensionAPI, prompt: string): Promise<void> {
+async function sendPromptAndWaitForSettlement(
+  pi: ExtensionAPI,
+  ctx: ExtensionCommandContext,
+  prompt: string,
+  rootEntryId: string,
+  iteration: number,
+): Promise<void> {
+  const stopTracking = trackTurnFiles(pi, ctx, rootEntryId, iteration);
+  let unsubscribe = () => {};
   const settled = new Promise<void>((resolve) => {
-    const unsubscribe = pi.on("agent_settled", () => {
-      unsubscribe();
+    unsubscribe = pi.on("agent_settled", () => {
       resolve();
     });
   });
 
-  pi.sendUserMessage(prompt);
-  await settled;
+  try {
+    pi.sendUserMessage(prompt);
+    await settled;
+  } finally {
+    unsubscribe();
+    stopTracking();
+  }
 }
 
 export function parseSweReplayRequest(args: string): SweReplayRequest | undefined {
