@@ -1,58 +1,232 @@
 # pi-swe-replay
 
-A [Pi coding agent](https://github.com/earendil-works/pi) extension implementing the foundations of SWE-Replay.
+A [Pi coding agent](https://github.com/earendil-works/pi) extension for trying multiple approaches to the same coding task.
 
-## Commands
+The extension implements the exploration and exploitation foundations of [SWE-Replay](https://arxiv.org/html/2601.22129v2).
 
-- `/swe-replay <n> <prompt>` starts a replay run requesting `n` candidate patches.
-- `/inspect-session` displays persisted SWE-Replay entries on the active session branch.
-- `/swe-replay-view` opens a read-only inspector across archived branches (text summary outside TUI mode).
+**This is experimental.** Patch capture, regression filtering, and evaluation are not implemented yet. Use a disposable repository and session: replay sends real agent prompts and replaces workspace files when switching trajectories.
 
-The first iteration explores; later iterations independently choose exploration or exploitation with equal probability. Exploration returns to the run's conversation root, restores its initial workspace, and sends the prompt again.
-
-**This is a scaffold, not a complete patch-generation workflow.** Exploitation selects and logs a step in `swe-replay-exploit-log`, navigates the conversation immediately **before** that assistant message without summarizing, and restores the matching workspace. The previous turn's tool results and tracking snapshots remain in context, while the selected step and its results stay archived on the original branch. It then starts a replacement trajectory with a hidden, empty `swe-replay-continue` custom message and waits for agent settlement, tracking files and workspace snapshots as usual. This adds an empty user-role message to model context rather than a textual continuation instruction; provider support still needs live smoke testing. With no eligible states, it logs the reason and falls back to exploration. Patch capture, regression filtering, and evaluation are not implemented. Run experiments only in disposable repositories/sessions.
-
-## Workspace snapshots
-
-A Git repository with an existing HEAD and no submodules or unresolved index conflicts is required. At the replay root and after every agent turn, SWE-Replay creates a stash-shaped Git snapshot containing the index, tracked working-tree changes, and untracked files (excluding ignored files). Capture uses temporary indexes and does not clean or alter workspace files. Snapshot OIDs, retaining refs, the replay root ID, and completed assistant step ID are persisted in `swe-replay-workspace` entries. Exploitation resolves the preceding snapshot through the selected step's ancestors; it never restores that step's own post-turn state or a sibling branch's state. Older steps without snapshots cannot be restored.
-
-**Restoration replaces current tracked and untracked state**, removing later non-ignored files and restoring staged changes. It uses `git reset --hard HEAD`, `git clean -fd`, and `git stash apply --index`. Before restoration, a recovery snapshot is retained in a `swe-replay-workspace-backup` entry. A changed HEAD or ignored-file collision causes restoration to refuse; Git errors stop the replay rather than silently continuing. A failed apply can leave a partially restored workspace; the recovery snapshot remains available.
-
-Snapshots are retained under `refs/swe-replay/*`, not the user's stash list, and survive Git garbage collection. They are not automatically deleted; remove these refs manually when the associated sessions/backups are no longer needed. A snapshot can be inspected with `git show <oid>` or applied with `git stash apply --index <oid>` in a suitable clean workspace. No environment state, ignored-file contents, nested repositories, external files, or other non-Git mutations are captured. Avoid concurrent external edits during replay.
-
-## Exploration states
-
-Successful `read`, `write`, and `edit` accesses are persisted as cumulative, sorted, absolute file paths in `swe-replay-turn-files` entries at each turn's end.
-
-For exploitation, completed steps across all branches of the current replay run are grouped into:
-
-```typescript
-interface ExplorationState {
-  files: string[];
-  candidateStepIds: string[];
-}
-```
-
-`files` is the sorted, deduplicated set explored **before** the step, obtained from its ancestor snapshots, not its own end-of-turn snapshot. Empty states are skipped. Candidate IDs identify assistant message entries and can be looked up with `sessionManager.getEntry(id)`; they are not snapshot entry IDs. Shared steps are counted once, and sibling branches do not inherit each other's files. The rollup is reconstructed from existing session entries without changing the persisted file-snapshot format.
-
-Selection uses two-stage softmax: `1 / candidate count` for states, then reasoning paragraph count for steps. All recorded completed steps are provisionally eligible; regression filtering is pending. Shell-based file accesses are not tracked. Non-context `swe-replay-step-boundary` entries anchor assistant steps so future navigation can retain the preceding empty custom message (Pi otherwise navigates before custom messages).
-
-## Reasoning scores
-
-`reasoningScore(stepId, sessionManager)` looks up a candidate's assistant message and returns its visible thinking paragraph count, for use as the step-selection softmax logit. Blank lines (including whitespace-only lines) separate paragraphs; single newlines do not. Counts are summed across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning are excluded. A valid step without visible reasoning scores zero; missing IDs and non-assistant entries throw. Each selection logs a versioned trace containing state probabilities, the selected state's candidate scores/probabilities, and the chosen IDs. Selection math stays private to the selector.
-
-## Inspector
-
-Use Tab to switch Runs/Trajectories/Decisions, ↑↓ to select, Enter to open a run or toggle detail focus, PgUp/PgDn to scroll details, and Escape to go back/close. Press `r` on a step to reveal/hide its message and visible reasoning. `*` marks the active branch; `f` counts pre-step files and `r` counts reasoning paragraphs. Decision probabilities and scores come from recorded selection traces; older logs show probabilities as unavailable. Reopen to refresh; inspection never navigates or restores the session. In Decisions, `step-selected` means an exploitation replacement target was selected, not that generation completed; `explore-fallback` means exploitation found no eligible target and fell back to exploration. Decision logs do not record generation completion or patch evaluation, including for older sessions.
-
-See [implementation progress](docs/visualization-implementation.md) and [design](docs/visualization-design.md).
-
-## Use locally
+## Getting started
 
 ```bash
 npm ci
 pi --extension ./extensions/index.ts
 ```
+
+Then start a run:
+
+```text
+/swe-replay 5 Fix the bug described in issue 123
+```
+
+This runs five iterations. Each iteration generates a trajectory (roughly a session branch).
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `/swe-replay <n> <prompt>` | Runs `n` replay iterations for a task. |
+| `/swe-replay-view` | Opens the replay dashboard across active and archived branches. Outside TUI mode, prints a summary. |
+| `/inspect-session` | Dumps persisted SWE-Replay entries on the active session branch. |
+
+Although the command currently refers to candidate patches in some messages, `n` controls iterations. The extension does not yet capture or evaluate a patch from each iteration.
+
+## How replay works
+
+The first iteration always **explores**: it sends your prompt from the replay root.
+
+Each later iteration independently chooses, with equal probability, between:
+
+- **Explore:** restore the initial workspace, return to the replay root, and send the original prompt again.
+- **Exploit:** choose an earlier assistant step, restore the conversation and workspace immediately before it, and generate an alternative continuation.
+
+For example, if the first trajectory is:
+
+```text
+prompt → A → B → C
+```
+
+Exploiting step B produces a branch like:
+
+```text
+prompt → A → B′ → …
+```
+
+The original B and C remain archived. The new trajectory does not see B’s reasoning, tool calls, or results.
+
+Continuation is triggered with a hidden, empty custom message. Pi includes it in model context as an empty user-role message; it adds no textual instruction. Empty-message handling may vary between providers.
+
+If exploitation finds no eligible steps, that iteration falls back to exploration.
+
+## Reading the dashboard
+
+Open `/swe-replay-view` to inspect a run. The dashboard is read-only: selecting a step does not navigate the session or restore files. Reopen it to refresh.
+
+### Trajectories
+
+This view is a **tree of assistant steps**, not one row per iteration. A trajectory is a path through the tree.
+
+A row looks like:
+
+```text
+└─ * abc123 #2 f:5 r:3 ← selected
+```
+
+| Marker | Meaning |
+|---|---|
+| Indentation | The step follows the nearest recorded assistant ancestor. Equally indented children of the same parent are alternatives. |
+| `*` | The step belongs to the currently active session branch. |
+| `abc123` | The assistant message’s session-entry ID. |
+| `#2` | The iteration that recorded the step—not its position in the trajectory. |
+| `f:5` | Five distinct files had been explored before the step. |
+| `r:3` | The response contains three visible reasoning paragraphs. |
+| `← selected` | An exploitation decision chose this step as a replacement target. |
+
+Select a step to see its parent, pre-step file set, and the iterations that selected it. Press `r` to reveal its message text and visible reasoning.
+
+**“Selected in: none” does not mean exploration.** It means the step has never been chosen as a replacement target. Steps generated by either exploration or exploitation can have this label.
+
+The active branch is not necessarily the best branch. No dashboard marker currently indicates that a patch passed tests or was judged better.
+
+### Decisions
+
+This view lists **exploitation choices**, including choices that fell back to exploration. Ordinary exploration choices do not get decision rows.
+
+The `#` number is the replay iteration. For example, `#14` means “iteration 14,” not “the fourteenth exploitation decision.”
+
+Decision labels mean:
+
+- **`step-selected`:** exploitation selected a replacement target.
+- **`explore-fallback`:** exploitation found no eligible target and fell back to exploration.
+- **`unknown`:** the available record does not establish the selection outcome.
+
+A selection record does not prove that restoration or generation completed. Completion and patch evaluation are not recorded by this view.
+
+The details show the probabilities recorded when selection happened:
+
+- **`P(state)`** is the probability of choosing a file-exploration state after exploitation was chosen.
+- **`P(step | state)`** is the probability of choosing a particular step within that state.
+
+Neither is the probability of choosing exploration versus exploitation. Older records without selection traces show probabilities as unavailable.
+
+### Controls
+
+| Key | Action |
+|---|---|
+| Tab | Switch Runs / Trajectories / Decisions |
+| ↑ / ↓ | Select a row, or scroll when details are focused |
+| Enter | Open a run or toggle detail focus |
+| ← / → | Leave or enter detail focus |
+| PgUp / PgDn | Scroll details |
+| `r` | Reveal or hide a step’s message and visible reasoning |
+| Escape | Leave detail focus or close |
+
+The Runs view also shows diagnostics for missing or malformed records. Prompt and requested-iteration metadata may appear as `unknown` because the current replay root does not persist those fields.
+
+## How exploitation selects a step
+
+Selection happens in two stages.
+
+First, completed steps are grouped by the set of repository files explored **before** each step. Paths are absolute, sorted, and deduplicated. Steps with an empty pre-step file set are excluded.
+
+A file-state group is sampled using softmax over inverse group size:
+
+```text
+P(stateᵢ) ∝ exp(1 / number of steps in stateᵢ)
+```
+
+This favors states reached by fewer concrete steps.
+
+Within that group, a step is sampled using softmax over its visible reasoning paragraph count:
+
+```text
+P(step | state) ∝ exp(reasoning paragraph count)
+```
+
+Reasoning paragraphs are separated by blank lines and counted across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning do not contribute. A valid response without visible reasoning scores zero.
+
+These are sampling weights, not quality scores. All recorded completed steps are provisionally eligible; filtering out trajectories whose patches cause regressions is still pending.
+
+### File-access tracking
+
+Successful `read`, `write`, and `edit` calls contribute to a branch’s cumulative file-exploration set. Failed calls and shell-based file accesses do not.
+
+A step’s grouping key excludes its own accesses. Shared steps are counted once, and sibling branches do not inherit each other’s file sets.
+
+## Workspace snapshots and safety
+
+Replay requires a Git repository with an existing HEAD, no submodules, and no unresolved index conflicts.
+
+At the replay root and after each agent turn, the extension captures a stash-compatible snapshot containing:
+
+- Staged changes.
+- Tracked working-tree changes.
+- Untracked files, excluding ignored files.
+
+Capture uses temporary indexes and leaves workspace files unchanged. Snapshots are retained under `refs/swe-replay/*`, separate from your normal stash list.
+
+### Restoring a snapshot replaces files
+
+Restoration uses:
+
+```text
+git reset --hard HEAD
+git clean -fd
+git stash apply --index <snapshot>
+```
+
+This replaces current tracked and untracked state, including removing non-ignored files created after the snapshot. A recovery snapshot is retained before each restore.
+
+Restoration refuses if HEAD has changed or ignored files would obstruct it. Git errors stop replay, but a failed apply can leave a partially restored workspace. The recovery snapshot remains available.
+
+Avoid concurrent external edits while replay is running.
+
+### What snapshots do not restore
+
+Snapshots only cover the captured Git state. They do not undo:
+
+- Package installs into ignored directories such as `node_modules`.
+- Global installs or environment changes.
+- Changes outside the repository.
+- Ignored-file contents or nested repository state.
+- Other side effects such as services started by the agent.
+
+Tracked changes caused by these actions, such as lockfile updates, are captured.
+
+### Retention and recovery
+
+Snapshot OIDs and retaining refs are stored in session entries. You can inspect a snapshot with:
+
+```bash
+git show <oid>
+```
+
+Or apply it in a suitable clean workspace:
+
+```bash
+git stash apply --index <oid>
+```
+
+Snapshots survive Git garbage collection and are not automatically deleted. Remove their `refs/swe-replay/*` refs manually when the associated sessions and recovery snapshots are no longer needed.
+
+Older trajectories without workspace snapshots cannot be restored.
+
+## Implementation notes
+
+Replay state is persisted in custom session entries:
+
+| Entry | Purpose |
+|---|---|
+| `swe-replay-root` | Identifies a replay run. |
+| `swe-replay-turn-files` | Records cumulative file accesses after a turn. |
+| `swe-replay-workspace` | Maps a completed step—or the initial root—to a workspace snapshot. |
+| `swe-replay-workspace-backup` | Retains the current workspace before restoration. |
+| `swe-replay-exploit-log` | Records exploitation selection, candidate groups, and probabilities. |
+| `swe-replay-step-boundary` | Provides a navigation anchor before an assistant step. |
+
+The empty continuation trigger is a `swe-replay-continue` custom message. Step-boundary entries let future navigation retain that message: Pi otherwise navigates before user and custom messages.
+
+`/inspect-session` only shows entries on the active branch. Use the dashboard to inspect records across archived branches.
 
 ## Checks
 
@@ -61,4 +235,4 @@ npx --no-install tsc --noEmit
 node --test tests/*.test.mjs
 ```
 
-The tests use Node.js's built-in test runner and `jiti`, the TypeScript loader installed with Pi, without emitting build artifacts.
+Tests use Node.js’s built-in test runner and `jiti`, without emitting build artifacts. They do not establish provider compatibility; use a disposable repository/session for live smoke testing.
