@@ -8,9 +8,17 @@ A [Pi coding agent](https://github.com/earendil-works/pi) extension implementing
 - `/inspect-session` displays persisted SWE-Replay entries on the active session branch.
 - `/swe-replay-view` opens a read-only inspector across archived branches (text summary outside TUI mode).
 
-The first iteration explores; later iterations independently choose exploration or exploitation with equal probability. Exploration returns to the run's conversation root and sends the prompt again.
+The first iteration explores; later iterations independently choose exploration or exploitation with equal probability. Exploration returns to the run's conversation root, restores its initial workspace, and sends the prompt again.
 
-**This is a scaffold, not a complete patch-generation workflow.** Exploitation selects and logs a step in `swe-replay-exploit-log`, but does not yet restore or resume it. With no eligible states, it logs the reason and falls back to exploration. Workspace restoration, patch capture, regression filtering, and evaluation are not implemented. Conversation navigation does not restore files. Run experiments only in disposable repositories/sessions.
+**This is a scaffold, not a complete patch-generation workflow.** Exploitation selects and logs a step in `swe-replay-exploit-log` and restores the workspace immediately **before** that step. It does not yet navigate the conversation or generate a replacement step. With no eligible states, it logs the reason and falls back to exploration. Patch capture, regression filtering, and evaluation are not implemented. Run experiments only in disposable repositories/sessions.
+
+## Workspace snapshots
+
+A Git repository with an existing HEAD and no submodules or unresolved index conflicts is required. At the replay root and after every agent turn, SWE-Replay creates a stash-shaped Git snapshot containing the index, tracked working-tree changes, and untracked files (excluding ignored files). Capture uses temporary indexes and does not clean or alter workspace files. Snapshot OIDs, retaining refs, the replay root ID, and completed assistant step ID are persisted in `swe-replay-workspace` entries. Exploitation resolves the preceding snapshot through the selected step's ancestors; it never restores that step's own post-turn state or a sibling branch's state. Older steps without snapshots cannot be restored.
+
+**Restoration replaces current tracked and untracked state**, removing later non-ignored files and restoring staged changes. It uses `git reset --hard HEAD`, `git clean -fd`, and `git stash apply --index`. Before restoration, a recovery snapshot is retained in a `swe-replay-workspace-backup` entry. A changed HEAD or ignored-file collision causes restoration to refuse; Git errors stop the replay rather than silently continuing. A failed apply can leave a partially restored workspace; the recovery snapshot remains available.
+
+Snapshots are retained under `refs/swe-replay/*`, not the user's stash list, and survive Git garbage collection. They are not automatically deleted; remove these refs manually when the associated sessions/backups are no longer needed. A snapshot can be inspected with `git show <oid>` or applied with `git stash apply --index <oid>` in a suitable clean workspace. No environment state, ignored-file contents, nested repositories, external files, or other non-Git mutations are captured. Avoid concurrent external edits during replay.
 
 ## Exploration states
 

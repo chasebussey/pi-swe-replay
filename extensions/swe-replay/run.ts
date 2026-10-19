@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { trackTurnFiles } from "./track-turn-files";
 import { rollUpExplorationStates } from "./exploration-state";
 import { selectExploitationStep } from "./select-step";
+import { ReplayWorkspace, preStepSnapshot, type WorkspaceSnapshot } from "./workspace";
 
 interface SweReplayRequest {
   n: number;
@@ -30,7 +31,7 @@ export async function runSweReplay(
   n: number,
   prompt: string,
 ): Promise<SweReplayRun> {
-  // TODO: Use pi and ctx to create a stable root entry for this replay run.
+  const workspace = await ReplayWorkspace.open(ctx.cwd);
   pi.appendEntry(
     "swe-replay-root",
     {
@@ -45,7 +46,17 @@ export async function runSweReplay(
 
   const rootEntryId = rootEntry.id;
 
-  await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, 1);
+  const initial = await workspace.capture(rootEntryId, rootEntryId);
+  pi.appendEntry("swe-replay-workspace", initial);
+
+  const restore = async (snapshot: WorkspaceSnapshot) => {
+    // Retain a recovery snapshot before replacing any current files.
+    const backup = await workspace.capture(rootEntryId, ctx.sessionManager.getLeafEntry()?.id ?? rootEntryId);
+    pi.appendEntry("swe-replay-workspace-backup", backup);
+    await workspace.restore(snapshot);
+  };
+
+  await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, 1, workspace);
 
   for (let i = 2; i <= n; i++) {
     const explore = Math.random() < 0.5;
@@ -64,7 +75,9 @@ export async function runSweReplay(
         fallbackReason: selection ? undefined : "no-eligible-states",
       });
       if (selection) {
-        // TODO: Restore pre-step context/workspace and continue a new branch.
+        const snapshot = preStepSnapshot(ctx.sessionManager.getEntries(), rootEntryId, selection.stepId);
+        await restore(snapshot);
+        // Context navigation and replacement-step generation are intentionally deferred.
         continue;
       }
     }
@@ -74,8 +87,11 @@ export async function runSweReplay(
       throw new Error(`Explore iteration ${i} was cancelled.`);
     }
 
+    await restore(initial);
+    // Reattach the root state on this branch so its first step has a snapshot ancestor.
+    pi.appendEntry("swe-replay-workspace", initial);
     // Make a fresh trajectory, including when exploitation has no candidates.
-    await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i);
+    await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i, workspace);
   }
   // TODO: Generate and evaluate one patch per iteration.
   // TODO: Record candidates and return the best result.
@@ -95,8 +111,20 @@ async function sendPromptAndWaitForSettlement(
   prompt: string,
   rootEntryId: string,
   iteration: number,
+  workspace: ReplayWorkspace,
 ): Promise<void> {
   const stopTracking = trackTurnFiles(pi, ctx, rootEntryId, iteration);
+  let snapshotError: unknown;
+  const stopSnapshots = pi.on("turn_end", async (event) => {
+    try {
+      const snapshot = await workspace.capture(rootEntryId, event.messageEntryId);
+      pi.appendEntry("swe-replay-workspace", snapshot);
+    } catch (error) {
+      // Pi reports handler exceptions but may continue. Abort and propagate at settlement.
+      snapshotError = error;
+      ctx.abort();
+    }
+  });
   let unsubscribe = () => {};
   const settled = new Promise<void>((resolve) => {
     unsubscribe = pi.on("agent_settled", () => {
@@ -107,8 +135,10 @@ async function sendPromptAndWaitForSettlement(
   try {
     pi.sendUserMessage(prompt);
     await settled;
+    if (snapshotError) throw snapshotError;
   } finally {
     unsubscribe();
+    stopSnapshots();
     stopTracking();
   }
 }
