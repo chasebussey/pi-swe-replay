@@ -26,12 +26,14 @@ function turnFiles(entry: SessionEntry): TurnFilesEntry | undefined {
  * Walk that message's ancestors to find the latest snapshot BEFORE the step:
  * its own snapshot already includes its tool accesses and must not be used.
  *
- * Patch/regression eligibility is not evaluated here yet. Callers must filter
- * archived trajectories once patch evaluation is available.
+ * Callers may supply eligible step IDs from passing trajectories. Filtering
+ * precedes grouping but leaves all ancestors available for state reconstruction.
+ * Omitting eligibility retains historical behavior for archive visualization.
  */
 export function rollUpExplorationStates(
   entries: readonly SessionEntry[],
   rootEntryId: string,
+  eligibleSteps?: ReadonlySet<string>,
 ): ExplorationState[] {
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const states = new Map<string, ExplorationState>();
@@ -42,6 +44,7 @@ export function rollUpExplorationStates(
     if (!snapshot || snapshot.rootEntryId !== rootEntryId) continue;
     const step = byId.get(snapshot.messageEntryId);
     if (!step || step.type !== "message" || step.message.role !== "assistant") continue;
+    if (eligibleSteps && !eligibleSteps.has(step.id)) continue;
     if (seenSteps.has(step.id)) continue;
     seenSteps.add(step.id);
 

@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { fsCache: false });
-const { runSweReplay } = await jiti.import("../extensions/swe-replay/run.ts");
+const { runSweReplay: run } = await jiti.import("../extensions/swe-replay/run.ts");
+const runSweReplay = (pi, ctx, n, prompt, command = "true") => run(pi, ctx, n, prompt, command);
 
 function harness(withCandidates, t, { cancelNavigation = false } = {}) {
   const cwd = mkdtempSync(join(tmpdir(), "replay-run-test-"));
@@ -37,6 +38,7 @@ function harness(withCandidates, t, { cancelNavigation = false } = {}) {
   };
   const ctx = {
     cwd,
+    ui: { notify: () => {} },
     sessionManager: {
       getEntries: () => [...entries],
       getEntry: (id) => entries.find((entry) => entry.id === id),
@@ -61,6 +63,13 @@ function harness(withCandidates, t, { cancelNavigation = false } = {}) {
     },
   };
   const pi = {
+    exec: async (command, args, options) => {
+      try {
+        return { stdout: execFileSync(command, args, { ...options, encoding: "utf8", stdio: "pipe" }), stderr: "", code: 0, killed: false };
+      } catch (error) {
+        return { stdout: error.stdout ?? "", stderr: error.stderr ?? "", code: error.status ?? 1, killed: Boolean(error.signal) };
+      }
+    },
     appendEntry: (customType, data) => append({ type: "custom", customType, data }),
     on: (name, handler) => {
       if (!listeners.has(name)) listeners.set(name, new Set());
@@ -204,6 +213,41 @@ test("an empty archive logs its fallback reason and explores from the root", asy
   assert.equal(h.promptCount(), 2);
   assert.equal(h.continuations.length, 0);
   assert.deepEqual(h.navigations, [{ id: h.entries[0].id, options: { summarize: false } }]);
+  assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
+});
+
+test("a failing baseline stops before any prompt and persists the frozen command", async (t) => {
+  const h = harness(true, t);
+  await assert.rejects(runSweReplay(h.pi, h.ctx, 2, "task", "exit 1"), /baseline failed/);
+  assert.equal(h.promptCount(), 0);
+  assert.equal(h.entries[0].data.testCommand, "exit 1");
+  assert.equal(h.entries[0].data.prompt, "task");
+  const evaluation = h.entries.find((entry) => entry.customType === "swe-replay-evaluation").data;
+  assert.equal(evaluation.iteration, 0);
+  assert.equal(evaluation.status, "failed");
+});
+
+test("failed trajectories are excluded before grouping and fall back to exploration", async (t) => {
+  t.mock.method(Math, "random", () => 0.9);
+  const h = harness(true, t);
+  // Baseline passes; both generated candidates fail. Tests mutate only the evaluator's copy.
+  await runSweReplay(h.pi, h.ctx, 2, "task", 'test "$(cat a)" = initial');
+  assert.equal(h.promptCount(), 2);
+  assert.equal(h.continuations.length, 0);
+  const evaluations = h.entries.filter((entry) => entry.customType === "swe-replay-evaluation");
+  assert.deepEqual(evaluations.map((entry) => entry.data.status), ["passed", "failed", "failed"]);
+  const log = h.entries.find((entry) => entry.customType === "swe-replay-exploit-log").data;
+  assert.deepEqual(log.states, []);
+  assert.equal(log.fallbackReason, "no-eligible-states");
+});
+
+test("inconclusive candidate evaluation persists evidence and stops replay", async (t) => {
+  const h = harness(true, t);
+  let calls = 0;
+  h.pi.exec = async () => ({ code: 0, killed: calls++ > 0, stdout: "", stderr: "" });
+  await assert.rejects(runSweReplay(h.pi, h.ctx, 3, "task"), /iteration 1.*inconclusive/);
+  assert.equal(h.promptCount(), 1);
+  assert.equal(h.entries.at(-1).data.status, "inconclusive");
   assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
 });
 

@@ -14,9 +14,18 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const run = await runSweReplay(pi, ctx, request.n, request.prompt);
+      if (!ctx.hasUI) {
+        ctx.ui.notify("SWE-Replay currently requires UI input for its regression test command.", "error");
+        return;
+      }
+      const testCommand = await ctx.ui.input("Regression test command", "e.g. npm ci && npm test");
+      if (!testCommand?.trim()) {
+        ctx.ui.notify("Replay cancelled: a regression test command is required.", "info");
+        return;
+      }
+      const run = await runSweReplay(pi, ctx, request.n, request.prompt, testCommand.trim());
       ctx.ui.notify(
-        `SWE-Replay scaffold started for ${run.requestedPatchCount} patch(es): ${run.prompt}`,
+        `SWE-Replay completed ${run.requestedPatchCount} iteration(s): ${run.prompt}`,
         "info",
       );
     },

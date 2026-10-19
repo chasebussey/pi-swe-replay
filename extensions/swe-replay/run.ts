@@ -3,6 +3,7 @@ import { trackTurnFiles } from "./track-turn-files";
 import { rollUpExplorationStates } from "./exploration-state";
 import { selectExploitationStep } from "./select-step";
 import { ReplayWorkspace, preStepSnapshot, type WorkspaceSnapshot } from "./workspace";
+import { eligibleStepIds, evaluateSnapshot, EVALUATION_TIMEOUT_MS } from "./evaluation";
 
 interface SweReplayRequest {
   n: number;
@@ -30,12 +31,13 @@ export async function runSweReplay(
   ctx: ExtensionCommandContext,
   n: number,
   prompt: string,
+  testCommand: string,
 ): Promise<SweReplayRun> {
+  if (!testCommand.trim()) throw new Error("A regression test command is required.");
   const workspace = await ReplayWorkspace.open(ctx.cwd);
   pi.appendEntry(
     "swe-replay-root",
-    {
-    }
+    { prompt, requestedPatchCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS, cwd: ctx.cwd }
   );
 
   const rootEntry = ctx.sessionManager.getLeafEntry();
@@ -56,13 +58,32 @@ export async function runSweReplay(
     await workspace.restore(snapshot);
   };
 
+  const passedTerminals: string[] = [];
+  const evaluate = async (iteration: number, snapshot?: WorkspaceSnapshot) => {
+    const terminal = ctx.sessionManager.getLeafEntry();
+    if (!terminal) throw new Error("No terminal entry to evaluate.");
+    const candidate = snapshot ?? await workspace.capture(rootEntryId, terminal.id);
+    const label = iteration === 0 ? "baseline" : `iteration ${iteration}`;
+    ctx.ui.notify(`Running regression validation: ${label}…`, "info");
+    const result = await evaluateSnapshot(pi, workspace, candidate, ctx.cwd, testCommand, iteration, terminal.id);
+    pi.appendEntry("swe-replay-evaluation", result);
+    ctx.ui.notify(`Regression validation ${label}: ${result.status}`, result.status === "passed" ? "info" : "warning");
+    if (result.status === "inconclusive" || (iteration === 0 && result.status !== "passed")) {
+      throw new Error(`Regression ${iteration === 0 ? "baseline" : `evaluation for iteration ${iteration}`} ${result.status}. Inspect swe-replay-evaluation for details.`);
+    }
+    if (iteration > 0 && result.status === "passed") passedTerminals.push(terminal.id);
+  };
+
+  await evaluate(0, initial);
   await startReplayAndWaitForSettlement(pi, ctx, () => pi.sendUserMessage(prompt), rootEntryId, 1, workspace);
+  await evaluate(1);
 
   for (let i = 2; i <= n; i++) {
     const explore = Math.random() < 0.5;
 
     if (!explore) {
-      const states = rollUpExplorationStates(ctx.sessionManager.getEntries(), rootEntryId);
+      const entries = ctx.sessionManager.getEntries();
+      const states = rollUpExplorationStates(entries, rootEntryId, eligibleStepIds(entries, rootEntryId, passedTerminals));
       const selection = selectExploitationStep(states, ctx.sessionManager);
       pi.appendEntry("swe-replay-exploit-log", {
         rootEntryId,
@@ -101,6 +122,7 @@ export async function runSweReplay(
             display: false,
           }, { triggerTurn: true });
         }, rootEntryId, i, workspace);
+        await evaluate(i);
         continue;
       }
     }
@@ -115,8 +137,9 @@ export async function runSweReplay(
     pi.appendEntry("swe-replay-workspace", initial);
     // Make a fresh trajectory, including when exploitation has no candidates.
     await startReplayAndWaitForSettlement(pi, ctx, () => pi.sendUserMessage(prompt), rootEntryId, i, workspace);
+    await evaluate(i);
   }
-  // TODO: Generate and evaluate one patch per iteration.
+  // TODO: Export one patch per iteration.
   // TODO: Record candidates and return the best result.
   return { requestedPatchCount: n, prompt };
 }

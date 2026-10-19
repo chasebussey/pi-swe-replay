@@ -38,6 +38,13 @@ test("groups archived steps by pre-step file sets, skipping empty states", () =>
   assert.deepEqual(entries[8].data.files, ["/b", "/a", "/a"]);
 });
 
+test("filters eligibility before grouping while retaining ancestors for pre-step state", () => {
+  assert.deepEqual(rollUpExplorationStates(archive(), "root", new Set(["a3"])), [
+    { files: ["/a", "/b"], candidateStepIds: ["a3"] },
+  ]);
+  assert.deepEqual(rollUpExplorationStates(archive(), "root", new Set()), []);
+});
+
 test("follows parent IDs rather than storage order and deduplicates concrete steps", () => {
   const entries = archive();
   entries.push(snapshot("duplicate", "s3", "a3", ["/different"]));

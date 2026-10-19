@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
@@ -80,6 +80,25 @@ export class ReplayWorkspace {
       return { rootEntryId, stepId, oid, ref };
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** Materialize a snapshot without replacing files in the active checkout. */
+  async withEvaluationWorkspace<T>(snapshot: WorkspaceSnapshot, cwd: string, evaluate: (directory: string) => Promise<T>): Promise<T> {
+    const dir = await mkdtemp(join(tmpdir(), "swe-replay-evaluation-"));
+    const root = join(dir, "repo");
+    let added = false;
+    try {
+      await this.git(["worktree", "add", "--detach", root, `${snapshot.oid}^1`]);
+      added = true;
+      await exec("git", ["stash", "apply", "--index", snapshot.oid], { cwd: root });
+      return await evaluate(join(root, relative(this.cwd, cwd)));
+    } finally {
+      try {
+        if (added) await this.git(["worktree", "remove", "--force", root]);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     }
   }
 

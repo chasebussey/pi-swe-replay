@@ -4,7 +4,7 @@ A [Pi coding agent](https://github.com/earendil-works/pi) extension for trying m
 
 The extension implements the exploration and exploitation foundations of [SWE-Replay](https://arxiv.org/html/2601.22129v2).
 
-**This is experimental.** Patch capture, regression filtering, and evaluation are not implemented yet. Use a disposable repository and session: replay sends real agent prompts and replaces workspace files when switching trajectories.
+**This is experimental.** Candidate snapshots are validated with a user-provided regression command; patch export and best-result ranking are not implemented yet. Use a disposable repository and session: replay sends real agent prompts and replaces workspace files when switching trajectories.
 
 ## Getting started
 
@@ -19,7 +19,13 @@ Then start a run:
 /swe-replay 5 Fix the bug described in issue 123
 ```
 
-This runs five iterations. Each iteration generates a trajectory (roughly a session branch).
+Pi asks for a **regression test command**, such as `npm ci && npm test`. A nonempty command is required; cancelling the dialog starts no run. UI input is currently required (interactive Pi or a compatible RPC client).
+
+The command runs first against the initial snapshot, which must pass, then against every completed trajectory. Each evaluation uses a fresh disposable Git worktree, with a ten-minute timeout, from the equivalent working directory. Ignored dependencies such as `node_modules` are **not copied**: include setup in your command or use a repository script. Commands execute through `bash -lc` and must propagate test failures.
+
+This runs five iterations. Each iteration generates a trajectory (roughly a session branch). Failed validation excludes a trajectory's unique steps from exploitation; shared prefixes remain eligible if they also belong to a passing trajectory. Timeouts or execution errors stop replay as inconclusive. Evaluation output is persisted outside model context, accessible through `/inspect-session`, not sent to the coding agent.
+
+Worktrees share Git metadata and OS permissions: this is not a security sandbox. Use a trusted command that does not mutate shared refs, the original checkout, or external resources. The final checkout remains the last generated candidate, even when validation fails. See [the validation design](regression-validation-design.md) for the full contract and limitations.
 
 ### Commands
 
@@ -29,7 +35,7 @@ This runs five iterations. Each iteration generates a trajectory (roughly a sess
 | `/swe-replay-view` | Opens the replay dashboard across active and archived branches. Outside TUI mode, prints a summary. |
 | `/inspect-session` | Dumps persisted SWE-Replay entries on the active session branch. |
 
-Although the command currently refers to candidate patches in some messages, `n` controls iterations. The extension does not yet capture or evaluate a patch from each iteration.
+Although the command currently refers to candidate patches in some messages, `n` controls iterations. The extension validates terminal workspace snapshots but does not yet export or rank patches.
 
 ## How replay works
 
@@ -100,7 +106,7 @@ Decision labels mean:
 - **`explore-fallback`:** exploitation found no eligible target and fell back to exploration.
 - **`unknown`:** the available record does not establish the selection outcome.
 
-A selection record does not prove that restoration or generation completed. Completion and patch evaluation are not recorded by this view.
+A selection record does not prove that restoration or generation completed. Completion and regression evaluation outcomes are not displayed by this view yet.
 
 The details show the probabilities recorded when selection happened:
 
@@ -121,7 +127,7 @@ Neither is the probability of choosing exploration versus exploitation. Older re
 | `r` | Reveal or hide a step’s message and visible reasoning |
 | Escape | Leave detail focus or close |
 
-The Runs view also shows diagnostics for missing or malformed records. Prompt and requested-iteration metadata may appear as `unknown` because the current replay root does not persist those fields.
+The Runs view also shows diagnostics for missing or malformed records. Older runs may show prompt and requested-iteration metadata as `unknown`; new runs persist those fields.
 
 ## How exploitation selects a step
 
@@ -145,7 +151,7 @@ P(step | state) ∝ exp(reasoning paragraph count)
 
 Reasoning paragraphs are separated by blank lines and counted across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning do not contribute. A valid response without visible reasoning scores zero.
 
-These are sampling weights, not quality scores. All recorded completed steps are provisionally eligible; filtering out trajectories whose patches cause regressions is still pending.
+These are sampling weights, not quality scores. For new runs, only steps on at least one passing trajectory are eligible. Filtering happens before group sizes and sampling probabilities are computed. A passing baseline is required; nonzero candidate exits fail the user's validation gate, but do not independently prove a test regression.
 
 ### File-access tracking
 
@@ -217,7 +223,8 @@ Replay state is persisted in custom session entries:
 
 | Entry | Purpose |
 |---|---|
-| `swe-replay-root` | Identifies a replay run. |
+| `swe-replay-root` | Identifies a replay run and freezes its prompt, iteration count, test command, timeout, and working directory. |
+| `swe-replay-evaluation` | Records baseline/candidate validation, terminal entry, snapshot OID, exit status, and bounded output. |
 | `swe-replay-turn-files` | Records cumulative file accesses after a turn. |
 | `swe-replay-workspace` | Maps a completed step—or the initial root—to a workspace snapshot. |
 | `swe-replay-workspace-backup` | Retains the current workspace before restoration. |
