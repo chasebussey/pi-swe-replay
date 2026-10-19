@@ -1,27 +1,45 @@
 # pi-swe-replay
 
-A minimal [Pi coding agent](https://github.com/earendil-works/pi) extension package.
+A [Pi coding agent](https://github.com/earendil-works/pi) extension implementing the foundations of SWE-Replay.
 
-It contributes one command:
+## Commands
 
-```text
-/greet [name]
+- `/swe-replay <n> <prompt>` starts a replay run requesting `n` candidate patches.
+- `/inspect-session` displays persisted SWE-Replay entries on the active session branch.
+
+The first iteration explores; later iterations independently choose exploration or exploitation with equal probability. Exploration returns to the run's conversation root and sends the prompt again.
+
+**This is a scaffold, not a complete patch-generation workflow.** Exploitation currently rolls up file-exploration states and records them in `swe-replay-exploit-log`; it does not yet sample or resume a step. Workspace restoration, patch capture, regression filtering, and evaluation are not implemented. Conversation navigation does not restore files. Run experiments only in disposable repositories/sessions.
+
+## Exploration states
+
+Successful `read`, `write`, and `edit` accesses are persisted as cumulative, sorted, absolute file paths in `swe-replay-turn-files` entries at each turn's end.
+
+For exploitation, completed steps across all branches of the current replay run are grouped into:
+
+```typescript
+interface ExplorationState {
+  files: string[];
+  candidateStepIds: string[];
+}
 ```
 
-For example, `/greet Ada` displays `Hello, Ada!`.
+`files` is the sorted, deduplicated set explored **before** the step, obtained from its ancestor snapshots, not its own end-of-turn snapshot. Empty states are skipped. Candidate IDs identify assistant message entries and can be looked up with `sessionManager.getEntry(id)`; they are not snapshot entry IDs. Shared steps are counted once, and sibling branches do not inherit each other's files. The rollup is reconstructed from existing session entries without changing the persisted file-snapshot format.
+
+These groups provide the inputs for future inverse-group-size state sampling and reasoning-paragraph step sampling. They currently include all recorded completed steps, without patch/regression eligibility filtering. Shell-based file accesses are not tracked.
 
 ## Use locally
 
-From this repository, start Pi with the extension explicitly:
-
 ```bash
+npm ci
 pi --extension ./extensions/index.ts
 ```
 
-Or install this directory as a project-local Pi package:
+## Checks
 
 ```bash
-pi install --local .
+npx --no-install tsc --noEmit
+node --test tests/*.test.mjs
 ```
 
-After granting project trust, Pi discovers the extension through the `pi` manifest in `package.json`.
+The tests use Node.js's built-in test runner and `jiti`, the TypeScript loader installed with Pi, without emitting build artifacts.

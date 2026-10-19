@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { trackTurnFiles } from "./track-turn-files";
+import { rollUpExplorationStates } from "./exploration-state";
 
 interface SweReplayRequest {
   n: number;
@@ -59,7 +60,9 @@ export async function runSweReplay(
       await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i);
     }
     else {
-      pi.appendEntry("swe-replay-exploit-log")
+      const states = rollUpExplorationStates(ctx.sessionManager.getEntries(), rootEntryId);
+      pi.appendEntry("swe-replay-exploit-log", { rootEntryId, iteration: i, states });
+      // TODO: Sample a state and step, restore pre-step state, and continue a new branch.
     }
   }
   // TODO: Generate and evaluate one patch per iteration.
