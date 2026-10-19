@@ -10,7 +10,7 @@ A [Pi coding agent](https://github.com/earendil-works/pi) extension implementing
 
 The first iteration explores; later iterations independently choose exploration or exploitation with equal probability. Exploration returns to the run's conversation root, restores its initial workspace, and sends the prompt again.
 
-**This is a scaffold, not a complete patch-generation workflow.** Exploitation selects and logs a step in `swe-replay-exploit-log` and restores the workspace immediately **before** that step. It does not yet navigate the conversation or generate a replacement step. With no eligible states, it logs the reason and falls back to exploration. Patch capture, regression filtering, and evaluation are not implemented. Run experiments only in disposable repositories/sessions.
+**This is a scaffold, not a complete patch-generation workflow.** Exploitation selects and logs a step in `swe-replay-exploit-log`, navigates the conversation immediately **before** that assistant message without summarizing, and restores the matching workspace. The previous turn's tool results and tracking snapshots remain in context, while the selected step and its results stay archived on the original branch. It then starts a replacement trajectory with a hidden, empty `swe-replay-continue` custom message and waits for agent settlement, tracking files and workspace snapshots as usual. This adds an empty user-role message to model context rather than a textual continuation instruction; provider support still needs live smoke testing. With no eligible states, it logs the reason and falls back to exploration. Patch capture, regression filtering, and evaluation are not implemented. Run experiments only in disposable repositories/sessions.
 
 ## Workspace snapshots
 
@@ -35,7 +35,7 @@ interface ExplorationState {
 
 `files` is the sorted, deduplicated set explored **before** the step, obtained from its ancestor snapshots, not its own end-of-turn snapshot. Empty states are skipped. Candidate IDs identify assistant message entries and can be looked up with `sessionManager.getEntry(id)`; they are not snapshot entry IDs. Shared steps are counted once, and sibling branches do not inherit each other's files. The rollup is reconstructed from existing session entries without changing the persisted file-snapshot format.
 
-Selection uses two-stage softmax: `1 / candidate count` for states, then reasoning paragraph count for steps. All recorded completed steps are provisionally eligible; regression filtering is pending. Shell-based file accesses are not tracked.
+Selection uses two-stage softmax: `1 / candidate count` for states, then reasoning paragraph count for steps. All recorded completed steps are provisionally eligible; regression filtering is pending. Shell-based file accesses are not tracked. Non-context `swe-replay-step-boundary` entries anchor assistant steps so future navigation can retain the preceding empty custom message (Pi otherwise navigates before custom messages).
 
 ## Reasoning scores
 

@@ -56,7 +56,7 @@ export async function runSweReplay(
     await workspace.restore(snapshot);
   };
 
-  await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, 1, workspace);
+  await startReplayAndWaitForSettlement(pi, ctx, () => pi.sendUserMessage(prompt), rootEntryId, 1, workspace);
 
   for (let i = 2; i <= n; i++) {
     const explore = Math.random() < 0.5;
@@ -76,8 +76,31 @@ export async function runSweReplay(
       });
       if (selection) {
         const snapshot = preStepSnapshot(ctx.sessionManager.getEntries(), rootEntryId, selection.stepId);
+        const step = ctx.sessionManager.getEntry(selection.stepId);
+        if (!step?.parentId) {
+          throw new Error(`No pre-step context for ${selection.stepId}.`);
+        }
+        // Navigate to the selected assistant's parent, not the previous assistant:
+        // the intervening tool results and tracking snapshots belong in the context.
+        const navigation = await ctx.navigateTree(step.parentId, { summarize: false });
+        if (navigation.cancelled) {
+          throw new Error(`Exploit iteration ${i} was cancelled.`);
+        }
+        // Pi navigates BEFORE user/custom messages, unlike other entry types.
+        // Do not restore files if navigation did not reach the requested boundary.
+        if (ctx.sessionManager.getLeafEntry()?.id !== step.parentId) {
+          throw new Error(`Navigation did not reach the pre-step context for ${selection.stepId}.`);
+        }
         await restore(snapshot);
-        // Context navigation and replacement-step generation are intentionally deferred.
+        await startReplayAndWaitForSettlement(pi, ctx, () => {
+          // This starts a run without adding a textual instruction. Pi still sends
+          // an empty user-role message; provider acceptance needs a live smoke test.
+          pi.sendMessage({
+            customType: "swe-replay-continue",
+            content: "",
+            display: false,
+          }, { triggerTurn: true });
+        }, rootEntryId, i, workspace);
         continue;
       }
     }
@@ -91,7 +114,7 @@ export async function runSweReplay(
     // Reattach the root state on this branch so its first step has a snapshot ancestor.
     pi.appendEntry("swe-replay-workspace", initial);
     // Make a fresh trajectory, including when exploitation has no candidates.
-    await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i, workspace);
+    await startReplayAndWaitForSettlement(pi, ctx, () => pi.sendUserMessage(prompt), rootEntryId, i, workspace);
   }
   // TODO: Generate and evaluate one patch per iteration.
   // TODO: Record candidates and return the best result.
@@ -99,21 +122,27 @@ export async function runSweReplay(
 }
 
 /**
- * Sends one replay prompt and waits for that run's final settlement.
+ * Starts an exploration or exploitation run and waits for its final settlement.
  *
- * The listener is registered before sendUserMessage because that method is
- * fire-and-forget: calling ctx.waitForIdle() immediately after it can observe
- * the brief pre-start idle state and return too early.
+ * Listeners are registered before triggering either fire-and-forget message API:
+ * calling ctx.waitForIdle() immediately afterward can observe the brief pre-start
+ * idle state and return too early.
  */
-async function sendPromptAndWaitForSettlement(
+async function startReplayAndWaitForSettlement(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
-  prompt: string,
+  startRun: () => void,
   rootEntryId: string,
   iteration: number,
   workspace: ReplayWorkspace,
 ): Promise<void> {
   const stopTracking = trackTurnFiles(pi, ctx, rootEntryId, iteration);
+  const stopBoundaries = pi.on("message_start", (event) => {
+    if (event.message.role !== "assistant") return;
+    // Pi navigates before user/custom messages. A non-context anchor after the
+    // trigger lets later exploitation retain that message when replacing this step.
+    pi.appendEntry("swe-replay-step-boundary", { rootEntryId, iteration });
+  });
   let snapshotError: unknown;
   const stopSnapshots = pi.on("turn_end", async (event) => {
     try {
@@ -133,12 +162,13 @@ async function sendPromptAndWaitForSettlement(
   });
 
   try {
-    pi.sendUserMessage(prompt);
+    startRun();
     await settled;
     if (snapshotError) throw snapshotError;
   } finally {
     unsubscribe();
     stopSnapshots();
+    stopBoundaries();
     stopTracking();
   }
 }
