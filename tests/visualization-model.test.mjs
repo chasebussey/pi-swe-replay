@@ -29,9 +29,13 @@ test("projects pre-step states, ancestry, scores, selections, and active branch 
   assert.deepEqual(view.steps.find((step) => step.id === "b2").selectedIn, [3]);
   assert.equal(view.steps.find((step) => step.id === "b2").reasoningScore, 3);
   assert.deepEqual(view.diagnostics, []);
-  assert.equal(view.decisions[0].outcome, "selected-only");
+  assert.equal(view.decisions[0].outcome, "step-selected");
   assert.ok(!JSON.stringify(view).includes("Private reasoning"));
-  assert.match(replaySummary(view), /requested iterations: unknown/);
+  const summary = replaySummary(view);
+  assert.match(summary, /requested iterations: unknown/);
+  assert.match(summary, /step-selected/);
+  assert.match(summary, /Decisions record selection, not generation completion/);
+  assert.doesNotMatch(summary, /selected-only|Selection-only|no replacement branch/);
 });
 
 test("historical distributions use captured membership, unaffected by future candidates", () => {

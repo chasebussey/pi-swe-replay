@@ -22,7 +22,8 @@ export interface DecisionStateView {
 export interface ReplayDecisionView {
   id: string;
   iteration?: number;
-  outcome: "selected-only" | "explore-fallback" | "unknown";
+  /** Selection outcome only; generation completion is not recorded here. */
+  outcome: "step-selected" | "explore-fallback" | "unknown";
   selectedStepId?: string;
   recordedScore?: number;
   fallbackReason?: string;
@@ -227,7 +228,7 @@ export function buildReplayView(
       }
       if (!validStates) view.diagnostics.push(`Decision ${entry.id} has incomplete candidate groups.`);
     }
-    if (decision.selectedStepId) decision.outcome = "selected-only";
+    if (decision.selectedStepId) decision.outcome = "step-selected";
     else if (decision.fallbackReason) decision.outcome = "explore-fallback";
     for (const state of decision.states) {
       for (const candidate of state.candidates) {
@@ -256,6 +257,6 @@ export function replaySummary(view: ReplayView): string {
     `${view.steps.length} recorded steps; ${view.decisions.length} exploitation decisions`,
     ...view.decisions.map((decision) => `Iteration ${decision.iteration ?? "?"}: ${decision.outcome}${decision.selectedStepId ? ` → ${decision.selectedStepId}` : ""}${decision.fallbackReason ? ` (${decision.fallbackReason})` : ""}`),
     ...view.diagnostics.map((message) => `Warning: ${message}`),
-    "Read-only snapshot. Selection-only is not a generated branch; patches are not evaluated.",
+    "Read-only snapshot. Decisions record selection, not generation completion; patches are not evaluated.",
   ].join("\n");
 }

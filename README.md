@@ -43,7 +43,7 @@ Selection uses two-stage softmax: `1 / candidate count` for states, then reasoni
 
 ## Inspector
 
-Use Tab to switch Runs/Trajectories/Decisions, ↑↓ to select, Enter to open a run or toggle detail focus, PgUp/PgDn to scroll details, and Escape to go back/close. Press `r` on a step to reveal/hide its message and visible reasoning. `*` marks the active branch; `f` counts pre-step files and `r` counts reasoning paragraphs. Decision probabilities and scores come from recorded selection traces; older logs show probabilities as unavailable. Reopen to refresh; inspection never navigates or restores the session.
+Use Tab to switch Runs/Trajectories/Decisions, ↑↓ to select, Enter to open a run or toggle detail focus, PgUp/PgDn to scroll details, and Escape to go back/close. Press `r` on a step to reveal/hide its message and visible reasoning. `*` marks the active branch; `f` counts pre-step files and `r` counts reasoning paragraphs. Decision probabilities and scores come from recorded selection traces; older logs show probabilities as unavailable. Reopen to refresh; inspection never navigates or restores the session. In Decisions, `step-selected` means an exploitation replacement target was selected, not that generation completed; `explore-fallback` means exploitation found no eligible target and fell back to exploration. Decision logs do not record generation completion or patch evaluation, including for older sessions.
 
 See [implementation progress](docs/visualization-implementation.md) and [design](docs/visualization-design.md).
 

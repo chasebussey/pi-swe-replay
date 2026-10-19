@@ -39,6 +39,12 @@ test("dashboard supports selection, views, detail paging, opt-in reveal, and clo
   h.component.handleInput("\t");
   assert.match(h.component.render(120).join("\n"), /\[Decisions\]/);
   assert.match(h.component.render(120).join("\n"), /recorded at selection time/);
+  h.resize(50);
+  const decisions = h.component.render(160).join("\n");
+  assert.match(decisions, /step-selected/);
+  assert.match(decisions, /this decision does not record generation completion/);
+  assert.match(decisions, /completion not recorded; no evaluation/);
+  assert.doesNotMatch(decisions, /selected-only|no replacement branch was generated/);
   h.component.handleInput("\x1b[6~"); // PageDown
   assert.ok(h.renders() > 0);
   h.component.handleInput("\t");
@@ -134,7 +140,8 @@ test("command registers and inspecting in every mode does not write or sample", 
     assert.deepEqual(h.ctx.sessionManager.getEntries(), before);
     assert.equal(h.customs(), mode === "tui" ? 1 : 0);
     if (mode !== "tui") {
-      assert.match(h.notices[0], /selected-only/);
+      assert.match(h.notices[0], /step-selected/);
+      assert.doesNotMatch(h.notices[0], /selected-only|Selection-only|no replacement branch/);
       assert.ok(!h.notices[0].includes("Private reasoning"));
     }
   }

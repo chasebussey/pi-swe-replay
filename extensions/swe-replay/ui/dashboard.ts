@@ -63,7 +63,7 @@ function decisionRows(view: ReplayView): Row[] {
           : `${candidate.id === decision.selectedStepId ? "→ " : "  "}${candidate.id}: recorded paragraphs ${candidate.score ?? "?"} · P(step | state) ${percent(candidate.probability)}`),
       ]),
       ...(decision.states.length === 0 ? ["No candidate groups recorded."] : []),
-      ...(decision.outcome === "selected-only" ? ["Selection only: no replacement branch was generated."] : []),
+      ...(decision.outcome === "step-selected" ? ["Replacement target selected; this decision does not record generation completion."] : []),
     ].join("\n"),
   }));
 }
@@ -183,7 +183,7 @@ export class ReplayDashboard implements Component {
       ["Runs", "Trajectories", "Decisions"].map((name, index) => index === this.tab ? `[${name}]` : name).join("  "),
       ...body,
       this.theme.fg("dim", `Tab views · ↑↓ ${this.detailFocus ? "details" : "select"} · Enter ${this.tab === 0 ? "open run" : "focus"} · PgUp/PgDn details · r reveal · Esc back/close`),
-      this.theme.fg("dim", `${view?.diagnostics.length ?? 0} warnings (Runs view) · * active · f:pre-step files r:paragraphs · settlement unknown; no evaluation`),
+      this.theme.fg("dim", `${view?.diagnostics.length ?? 0} warnings (Runs view) · * active · f:pre-step files r:paragraphs · completion not recorded; no evaluation`),
     ].map((line) => truncateToWidth(line, width)).slice(0, Math.max(1, this.terminalRows()));
   }
 
