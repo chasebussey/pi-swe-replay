@@ -21,14 +21,6 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("greet", {
-    description: "Show a greeting (optionally provide a name)",
-    handler: async (args, ctx) => {
-      const name = args.trim() || "world";
-      ctx.ui.notify(`Hello, ${name}!`, "info");
-    },
-  });
-
   pi.registerCommand("inspect-session", {
     description: "Show persisted SWE-Replay session entries",
     handler: async (_args, ctx) => {
