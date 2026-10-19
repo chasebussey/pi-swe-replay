@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { parseSweReplayRequest, runSweReplay } from "./swe-replay/run";
+import { showReplayView } from "./swe-replay/ui/show-view";
 
-/** A minimal project extension that adds the /greet command. */
+/** SWE-Replay commands and read-only inspection. */
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("swe-replay", {
     description: "Generate n candidate patches for a task (usage: /swe-replay <n> <prompt>)",
@@ -19,6 +20,11 @@ export default function (pi: ExtensionAPI) {
         "info",
       );
     },
+  });
+
+  pi.registerCommand("swe-replay-view", {
+    description: "Inspect replay trajectories and selection decisions (read-only)",
+    handler: async (_args, ctx) => showReplayView(ctx),
   });
 
   pi.registerCommand("inspect-session", {

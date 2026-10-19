@@ -57,7 +57,10 @@ export async function runSweReplay(
         rootEntryId,
         iteration: i,
         states,
-        selection: selection ?? null,
+        selection: selection ? {
+          state: selection.state, stepId: selection.stepId, reasoningScore: selection.reasoningScore,
+        } : null,
+        trace: selection?.trace ?? null,
         fallbackReason: selection ? undefined : "no-eligible-states",
       });
       if (selection) {

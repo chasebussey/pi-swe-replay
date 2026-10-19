@@ -77,6 +77,16 @@ test("exploitation persists its selection without navigating or sending a replac
   assert.equal(log.selection.reasoningScore, 1);
   assert.equal(h.ctx.sessionManager.getEntry(log.selection.stepId).message.role, "assistant");
   assert.equal(log.fallbackReason, undefined);
+  const persisted = JSON.parse(JSON.stringify(log));
+  assert.equal(persisted.trace.policyVersion, 1);
+  assert.equal(persisted.trace.selectedStepId, persisted.selection.stepId);
+  assert.deepEqual(persisted.trace.states, [{
+    files: ["/repo/a"], candidateStepIds: [persisted.selection.stepId], probability: 1,
+  }]);
+  assert.deepEqual(persisted.trace.candidates, [{
+    stepId: persisted.selection.stepId, reasoningScore: 1, probability: 1,
+  }]);
+  assert.equal(persisted.selection.trace, undefined); // Stored once, alongside legacy fields.
   assert.equal(h.promptCount(), 1);
   assert.deepEqual(h.navigations, []);
   assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
@@ -89,6 +99,7 @@ test("an empty archive logs its fallback reason and explores from the root", asy
   const log = h.entries.find((entry) => entry.customType === "swe-replay-exploit-log").data;
   assert.deepEqual(log.states, []);
   assert.equal(log.selection, null);
+  assert.equal(log.trace, null);
   assert.equal(log.fallbackReason, "no-eligible-states");
   assert.equal(h.promptCount(), 2);
   assert.deepEqual(h.navigations, [{ id: h.entries[0].id, options: { summarize: false } }]);

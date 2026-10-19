@@ -40,12 +40,14 @@ test("samples within the chosen state using softmax of paragraph counts", () => 
   const state = { files: ["/a"], candidateStepIds: ["short", "long"] };
   const session = sessionWith({ short: 1, long: 3 });
   const boundary = Math.exp(1) / (Math.exp(1) + Math.exp(3));
-  assert.deepEqual(selectExploitationStep([state], session, draws(0, boundary - 1e-9)), {
-    state, stepId: "short", reasoningScore: 1,
-  });
-  assert.deepEqual(selectExploitationStep([state], session, draws(0, boundary + 1e-9)), {
-    state, stepId: "long", reasoningScore: 3,
-  });
+  for (const [draw, stepId, score] of [[boundary - 1e-9, "short", 1], [boundary + 1e-9, "long", 3]]) {
+    const result = selectExploitationStep([state], session, draws(0, draw));
+    assert.equal(result.state, state);
+    assert.equal(result.stepId, stepId);
+    assert.equal(result.reasoningScore, score);
+    assert.equal(result.trace.selectedStepId, stepId);
+    assert.ok(Math.abs(result.trace.candidates[0].probability - boundary) < 1e-15);
+  }
 });
 
 test("zero reasoning scores give uniform step probabilities", () => {

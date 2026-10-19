@@ -6,6 +6,7 @@ A [Pi coding agent](https://github.com/earendil-works/pi) extension implementing
 
 - `/swe-replay <n> <prompt>` starts a replay run requesting `n` candidate patches.
 - `/inspect-session` displays persisted SWE-Replay entries on the active session branch.
+- `/swe-replay-view` opens a read-only inspector across archived branches (text summary outside TUI mode).
 
 The first iteration explores; later iterations independently choose exploration or exploitation with equal probability. Exploration returns to the run's conversation root and sends the prompt again.
 
@@ -30,7 +31,13 @@ Selection uses two-stage softmax: `1 / candidate count` for states, then reasoni
 
 ## Reasoning scores
 
-`reasoningScore(stepId, sessionManager)` looks up a candidate's assistant message and returns its visible thinking paragraph count, for use as the step-selection softmax logit. Blank lines (including whitespace-only lines) separate paragraphs; single newlines do not. Counts are summed across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning are excluded. A valid step without visible reasoning scores zero; missing IDs and non-assistant entries throw. The selected step's score is logged with its state and ID.
+`reasoningScore(stepId, sessionManager)` looks up a candidate's assistant message and returns its visible thinking paragraph count, for use as the step-selection softmax logit. Blank lines (including whitespace-only lines) separate paragraphs; single newlines do not. Counts are summed across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning are excluded. A valid step without visible reasoning scores zero; missing IDs and non-assistant entries throw. Each selection logs a versioned trace containing state probabilities, the selected state's candidate scores/probabilities, and the chosen IDs. Selection math stays private to the selector.
+
+## Inspector
+
+Use Tab to switch Runs/Trajectories/Decisions, ↑↓ to select, Enter to open a run or toggle detail focus, PgUp/PgDn to scroll details, and Escape to go back/close. Press `r` on a step to reveal/hide its message and visible reasoning. `*` marks the active branch; `f` counts pre-step files and `r` counts reasoning paragraphs. Decision probabilities and scores come from recorded selection traces; older logs show probabilities as unavailable. Reopen to refresh; inspection never navigates or restores the session.
+
+See [implementation progress](docs/visualization-implementation.md) and [design](docs/visualization-design.md).
 
 ## Use locally
 
