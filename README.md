@@ -28,6 +28,10 @@ interface ExplorationState {
 
 These groups provide the inputs for future inverse-group-size state sampling and reasoning-paragraph step sampling. They currently include all recorded completed steps, without patch/regression eligibility filtering. Shell-based file accesses are not tracked.
 
+## Reasoning scores
+
+`reasoningScore(stepId, sessionManager)` looks up a candidate's assistant message and returns its visible thinking paragraph count, for use as the step-selection softmax logit. Blank lines (including whitespace-only lines) separate paragraphs; single newlines do not. Counts are summed across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning are excluded. A valid step without visible reasoning scores zero; missing IDs and non-assistant entries throw. No score is persisted, and sampling is not yet wired up.
+
 ## Use locally
 
 ```bash
