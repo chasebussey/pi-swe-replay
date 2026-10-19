@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { trackTurnFiles } from "./track-turn-files";
 import { rollUpExplorationStates } from "./exploration-state";
+import { selectExploitationStep } from "./select-step";
 
 interface SweReplayRequest {
   n: number;
@@ -49,21 +50,29 @@ export async function runSweReplay(
   for (let i = 2; i <= n; i++) {
     const explore = Math.random() < 0.5;
 
-    if (explore) {
-      const navigation = await ctx.navigateTree(rootEntryId, { summarize: false });
-
-      if (navigation.cancelled) {
-        throw new Error(`Explore iteration ${i} was cancelled.`);
-      }
-
-      // Make a fresh trajectory and wait for it to settle before navigating again.
-      await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i);
-    }
-    else {
+    if (!explore) {
       const states = rollUpExplorationStates(ctx.sessionManager.getEntries(), rootEntryId);
-      pi.appendEntry("swe-replay-exploit-log", { rootEntryId, iteration: i, states });
-      // TODO: Sample a state and step, restore pre-step state, and continue a new branch.
+      const selection = selectExploitationStep(states, ctx.sessionManager);
+      pi.appendEntry("swe-replay-exploit-log", {
+        rootEntryId,
+        iteration: i,
+        states,
+        selection: selection ?? null,
+        fallbackReason: selection ? undefined : "no-eligible-states",
+      });
+      if (selection) {
+        // TODO: Restore pre-step context/workspace and continue a new branch.
+        continue;
+      }
     }
+
+    const navigation = await ctx.navigateTree(rootEntryId, { summarize: false });
+    if (navigation.cancelled) {
+      throw new Error(`Explore iteration ${i} was cancelled.`);
+    }
+
+    // Make a fresh trajectory, including when exploitation has no candidates.
+    await sendPromptAndWaitForSettlement(pi, ctx, prompt, rootEntryId, i);
   }
   // TODO: Generate and evaluate one patch per iteration.
   // TODO: Record candidates and return the best result.
