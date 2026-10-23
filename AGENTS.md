@@ -2,66 +2,106 @@
 
 ## Project overview
 
-`pi-swe-replay` is a TypeScript extension package for the Pi coding agent.
-It is intended to provide an implementation of SWE-Replay from within a coding agent session.
+`pi-swe-replay` is a TypeScript extension package for the Pi coding agent. It
+implements the exploration/exploitation foundations of
+[SWE-Replay v2](https://arxiv.org/html/2601.22129v2), with workspace restoration
+and user-command regression validation. Patch export and best-result ranking
+are not implemented.
 
 Registered commands:
-- `/swe-replay <n> <prompt>` starts a replay run requesting a positive number of patches.
+- `/swe-replay <n> <prompt>` starts a positive number of replay iterations and
+  asks for a required regression command through UI input.
+- `/swe-replay-view` opens a read-only dashboard across active and archived
+  branches; outside TUI mode it provides a summary.
 - `/inspect-session` displays SWE-Replay entries on the active session branch.
 
-## Product direction
+## Replay and candidate selection
 
-Follow [SWE-Replay v2](https://arxiv.org/html/2601.22129v2), particularly
-§§2.1–2.3 and Algorithm 1, for the replay and step-selection design below. This
-is intended behavior; exploitation and patch evaluation are not yet implemented.
+Follow the paper, particularly §§2.1–2.3 and Algorithm 1, while distinguishing
+implemented behavior from remaining work.
 
-- Repeat `n` times, generating one patch per iteration and maintaining an archive
-  of sampled trajectories.
-- The first iteration always explores to initialize the archive. For subsequent
-  iterations, choose exploration versus exploitation with an independent
-  Bernoulli trial, initially with `p = 0.5` for exploration (and `1 - p = 0.5`
-  for exploitation). This probability may change as future directions are explored.
-- **Explore:** generate a new trajectory from the session root.
-- **Exploit:** select a candidate step from archived trajectories, restore the
-  context and workspace state immediately before that step, then generate a
-  replacement step and continue along a new branch. Do not resume after the
-  selected step.
+- The first iteration always explores from the replay root. Later iterations
+  independently choose exploration or exploitation with probability 0.5 each.
+- Exploration restores the initial workspace and sends the original prompt.
+- Exploitation restores context and workspace immediately **before** the selected
+  assistant step, then generates a replacement continuation on a new branch.
+  Never resume after the selected step.
+- Continuation uses a hidden, empty `swe-replay-continue` custom message with
+  `triggerTurn: true`. It supplies no textual instruction, but Pi includes an
+  empty user-role message; provider compatibility needs live smoke testing.
+- If no eligible states exist, exploitation falls back to exploration.
 
-### Candidate selection during exploitation
+### Regression eligibility
 
-Softmax selection applies to exploitation, not fresh-from-root exploration.
+The user command runs through `bash -lc` in a fresh disposable Git worktree,
+with a ten-minute timeout, against the baseline and every completed trajectory's
+final workspace snapshot. It does not evaluate each intermediate step.
 
-1. The paper filters out trajectories whose final patches introduce regression
-   test failures before selecting steps (§2.1.1).
-2. Group steps by their file exploration state: the repository files explored
-   **before** the step. Represent this as a sorted, deduplicated list of file
-   names, preserving the paper's set semantics rather than file visitation order.
-   Steps with no previously explored files are skipped (Figure 3).
-3. Sample a state using softmax over inverse group size (§2.1.2):
-   `P(state_i) = exp(1 / v_i) / sum_j exp(1 / v_j)`, where `v_i` is the number of
-   concrete steps in that state across eligible archived trajectories. This
-   favors states reached by fewer steps, not individual rarely accessed files.
-4. Within the selected state, sample a concrete step using softmax over reasoning
-   paragraph count (§2.1.3):
-   `P(step_ik | state_i) = exp(l_ik) / sum_j exp(l_ij)`, where `l_ik` is the number
-   of reasoning paragraphs for that step. Use paragraph count, not token count
-   or raw reasoning length.
+- The baseline must pass before any agent prompt is sent.
+- Exit code zero passes; nonzero fails. Killed commands or execution errors are
+  inconclusive and stop replay.
+- Passing generated trajectories contribute terminal IDs to the run's in-memory
+  archive. Failed trajectories contribute no eligibility or sampling weight.
+- Shared-prefix steps remain eligible if any passing trajectory contains them.
+  A previously recorded terminal still counts after it acquires descendants.
+- Persist evaluation evidence outside model context. Do not feed test output to
+  the coding agent as an incidental part of selection.
 
-When implementing selection, distinguish the current end-of-turn file snapshots
-from the required state **before** a candidate step; do not include that step's
-own file accesses in its grouping key.
+### Multiplicity-weighted selection
+
+Softmax selection applies only to exploitation, not exploration.
+
+1. `eligibleStepIds` returns a `Map<string, number>` counting passing terminal
+   paths containing each entry. It currently includes non-assistant ancestors;
+   grouping restricts candidates to completed assistant steps.
+2. `rollUpExplorationStates` requires that map. Group eligible steps by files
+   explored **before** the step: absolute, sorted, deduplicated paths. Skip empty
+   file states. Do not include the step's own accesses in its grouping key.
+3. Represent membership as `candidates: [{ stepId, multiplicity }]`, not parallel
+   ID/count arrays. Store each assistant step once. Repeated turn snapshots do
+   not increase multiplicity; passing trajectory paths do.
+4. Sample a state with `P(state_i) ∝ exp(1 / v_i)`, where `v_i` is the sum of
+   candidate multiplicities in that state.
+5. Sample a unique step within that state with
+   `P(step | state) ∝ multiplicity × exp(reasoning paragraph count)`.
+   Count paragraphs, not tokens or raw length. Ignore assistant text, tool calls,
+   and redacted reasoning. Equal scores imply uniform unique-step probabilities
+   only when multiplicities are equal.
+
+Capture probabilities at selection time. Inspection must not rerun selection,
+consume randomness, or reconstruct missing historical distributions.
+
+### Trace metadata
+
+Current traces use candidate objects with multiplicities and declare
+`policyVersion: 1` and `eligibilityPolicy: "passed-trajectory-occurrences"`.
+Keep the producer, parser, and fixtures aligned on this policy. The parser rejects
+unsupported eligibility labels rather than reinterpreting their probabilities.
+Do not describe the current format as supporting historical policy-v1/v2
+compatibility; historical schemas are not automatically migrated.
 
 ## Repository map
 
-- `extensions/index.ts`: extension entry point and slash-command registration.
-- `extensions/swe-replay/run.ts`: argument parsing, replay orchestration, navigation,
-  and waiting for agent settlement. Exploitation and patch evaluation are unfinished.
-- `extensions/swe-replay/track-turn-files.ts`: branch-aware tracking of successful
-  `read`, `write`, and `edit` tool accesses, persisted as custom session entries.
-- `tsconfig.json`: strict TypeScript, ES2022, NodeNext resolution, no emitted output.
-- `package.json` / `package-lock.json`: npm dependencies and package metadata.
-- `README.md`: local usage instructions; currently describes only `/greet` and is
-  incomplete relative to the implementation.
+- `extensions/index.ts`: command registration, UI input, and notifications.
+- `extensions/swe-replay/run.ts`: argument parsing, replay orchestration,
+  evaluation scheduling, navigation, and settlement handling.
+- `extensions/swe-replay/evaluation.ts`: command execution, evidence, and passing
+  terminal-path counts.
+- `extensions/swe-replay/exploration-state.ts`: pre-step grouping and multiplicity.
+- `extensions/swe-replay/select-step.ts`: sampling and selection-trace capture.
+- `extensions/swe-replay/reasoning-score.ts`: visible reasoning paragraph counts.
+- `extensions/swe-replay/selection-trace.ts`: durable trace shape and validation.
+- `extensions/swe-replay/track-turn-files.ts`: branch-aware successful file access
+  tracking persisted as custom session entries.
+- `extensions/swe-replay/workspace.ts`: Git snapshot capture, restoration, and
+  disposable evaluation worktrees.
+- `extensions/swe-replay/visualization-model.ts` and `ui/`: read-only projection
+  and dashboard. Generation completion and regression outcomes are not displayed.
+- `tests/`: Node.js tests and session fixtures, loaded through `jiti`.
+- `tsconfig.json`: strict TypeScript, ES2022, NodeNext resolution, no output.
+- `README.md`: commands, selection semantics, workspace safety, and checks.
+- `docs/`: design notes; verify them against current implementation when making
+  changes rather than assuming every proposal is implemented.
 
 ## Setup and checks
 
@@ -70,53 +110,78 @@ Use npm and preserve the lockfile when changing dependencies.
 ```bash
 npm ci
 npx --no-install tsc --noEmit
+node --test tests/*.test.mjs
 ```
 
-The type check passes at initialization of this document. There are currently no
-package scripts, automated tests, or configured lint/format commands. Do not claim
-tests passed when only the type check was run.
+There are no package scripts or configured lint/format commands. Report actual
+results; a type check is not a test run.
 
-For interactive smoke testing, the README documents:
+For interactive smoke testing:
 
 ```bash
 pi --extension ./extensions/index.ts
 ```
 
-Run replay smoke tests in a disposable repository/session: replay sends real agent
-prompts and navigates session history. Check valid/invalid command arguments,
-settlement handling, branch isolation, and persisted file entries when relevant.
+Use a disposable repository/session: replay sends real prompts, navigates history,
+and replaces workspace files. Check arguments, command input/cancellation,
+settlement cleanup, branch isolation, regression filtering, and restoration.
 
 ## Implementation conventions
 
 - Follow existing TypeScript style: two-space indentation, double quotes, named
   exports for helpers, and type-only imports for Pi interfaces.
 - Keep command registration/UI concerns in `extensions/index.ts`; keep replay
-  orchestration and tracking in the `extensions/swe-replay/` modules.
-- Consult documentation/types for the installed Pi version before changing API
-  usage; do not assume another version's event or navigation semantics.
-- Register settlement listeners before sending prompts. Preserve listener cleanup
-  in `finally` blocks and the cleanup function returned by `trackTurnFiles`.
-- Preserve replay-run and active-branch isolation. File tracking is cumulative
-  within a branch, ignores failed tool calls, normalizes paths to absolute paths,
-  and stores sorted snapshots.
-- Update the README when changing public commands or setup instructions.
+  orchestration, selection, tracking, and evaluation in their modules.
+- Consult installed Pi documentation/types before changing API usage. Do not
+  assume another version's event or navigation semantics. Pi navigates before
+  user/custom messages; step-boundary entries preserve the intended context.
+- Register settlement listeners before triggering prompts or continuations.
+  Preserve cleanup in `finally` and the cleanup returned by `trackTurnFiles`.
+- Preserve run/branch isolation. File tracking is cumulative within a branch,
+  ignores failed tools, normalizes absolute paths, and persists sorted snapshots.
+- Tests for persisted probabilities should assert captured data, not recompute
+  historical values from later session contents. Malformed-input tests should
+  identify specific diagnostics rather than rely on broad warning counts.
+- Update README when changing commands, selection semantics, or setup.
 - Keep changes focused; do not edit `node_modules` or commit generated artifacts.
 
 ## Session state and workspace safety
 
-Current custom entry types are `swe-replay-root`, `swe-replay-exploit-log`, and
-`swe-replay-turn-files`. File snapshots contain `rootEntryId`, `iteration`,
-`turnIndex`, `messageEntryId`, and `files`. Consider existing persisted sessions
-when changing these names or shapes.
+Persisted custom entry types:
+- `swe-replay-root`: prompt, iteration count, test command, timeout, and cwd.
+- `swe-replay-evaluation`: baseline/candidate outcome and bounded evidence.
+- `swe-replay-exploit-log`: selection, candidate membership, and trace.
+- `swe-replay-turn-files`: `rootEntryId`, `iteration`, `turnIndex`,
+  `messageEntryId`, and cumulative `files`.
+- `swe-replay-workspace`: root/completed-step snapshot OID and retaining ref.
+- `swe-replay-workspace-backup`: recovery snapshot before restoration.
+- `swe-replay-step-boundary`: pre-assistant navigation anchor.
 
-The comment in `run.ts` describes a proposed Git-stash snapshot/restore model;
-that restoration behavior is not implemented. File-access tracking is not a
-workspace backup and does not capture file contents or arbitrary shell changes.
-Do not introduce destructive Git operations or overwrite pre-existing user work
-as an incidental part of replay implementation.
+Consider existing persisted sessions when changing shapes. Malformed decisions
+remain visible as `unknown` with diagnostics. Missing, invalid, or unsupported
+traces have unavailable probabilities; historical schemas are not automatically
+migrated. File-access snapshots are not file-content backups.
+
+Workspace capture uses temporary indexes and retains stash-compatible snapshots
+under `refs/swe-replay/*`, separate from the normal stash list. Restoration uses
+hard reset, clean, and stash apply, with a recovery snapshot first. It requires
+an existing HEAD, no submodules or index conflicts, and refuses changed HEAD or
+ignored-file collisions. A failed apply can leave partial restoration.
+
+Evaluation worktrees materialize staged, unstaged, and non-ignored untracked
+state without replacing the active checkout. Canonicalize working-directory
+aliases and reject source directories outside the repository. Ignored dependencies
+are not copied; commands must include needed setup. Worktrees share Git metadata
+and OS permissions: this is not a security sandbox. Commands must not mutate
+shared refs, the source checkout, or external resources.
+
+Snapshots do not undo ignored files, external changes, global installs, or
+services. Avoid concurrent edits. Do not introduce destructive Git operations
+outside explicit replay restoration or overwrite user work incidentally. Leave
+ordinary user stashes untouched unless explicitly asked to apply them.
 
 ## Collaboration and completion
 
-Before editing, inspect relevant files and the working-tree status. Preserve
-unrelated user changes. After editing, run the type check and any relevant tests;
-report what changed, validation results, and remaining limitations.
+Before editing, inspect relevant files and working-tree status. Preserve unrelated
+user changes. After editing, run the type check and relevant tests; report changes,
+actual validation results, known failures, and remaining limitations.

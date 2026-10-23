@@ -1,10 +1,10 @@
 /** Durable explanation data. Consumers validate/format it; they do not rerun selection. */
 export interface SelectionTrace {
   policyVersion: 1;
-  eligibilityPolicy: "all-recorded-completed-steps";
+  eligibilityPolicy: "passed-trajectory-occurrences";
   states: {
     files: string[];
-    candidateStepIds: string[];
+    candidates: { stepId: string; multiplicity: number }[];
     probability: number;
   }[];
   selectedStateIndex: number;
@@ -35,7 +35,8 @@ function distribution(values: number[]): boolean {
 /** Unknown versions or inconsistent records are unavailable, never reconstructed. */
 export function parseSelectionTrace(value: unknown): SelectionTrace | undefined {
   const trace = record(value);
-  if (trace?.policyVersion !== 1 || trace.eligibilityPolicy !== "all-recorded-completed-steps" ||
+
+  if (trace?.policyVersion !== 1 || trace.eligibilityPolicy !== "passed-trajectory-occurrences" ||
       !Array.isArray(trace.states) || !Array.isArray(trace.candidates) ||
       typeof trace.selectedStateIndex !== "number" || !Number.isSafeInteger(trace.selectedStateIndex) ||
       trace.selectedStateIndex < 0 || trace.selectedStateIndex >= trace.states.length ||
@@ -45,29 +46,45 @@ export function parseSelectionTrace(value: unknown): SelectionTrace | undefined 
   const seenSteps = new Set<string>();
   for (const raw of trace.states) {
     const state = record(raw);
-    if (!stringList(state?.files) || !stringList(state?.candidateStepIds) || !probability(state?.probability)) return;
-    for (const id of state.candidateStepIds) {
-      if (seenSteps.has(id)) return;
-      seenSteps.add(id);
+
+    if (!stringList(state?.files) || !Array.isArray(state?.candidates) ||
+        state.candidates.length === 0 || !probability(state?.probability)) return;
+
+    const candidates: SelectionTrace["states"][number]["candidates"] = [];
+    for (const rawCandidate of state.candidates) {
+      const candidate = record(rawCandidate);
+      if (typeof candidate?.stepId !== "string" ||
+          typeof candidate.multiplicity !== "number" || !Number.isSafeInteger(candidate.multiplicity) ||
+          candidate.multiplicity <= 0 || seenSteps.has(candidate.stepId)) return;
+
+      seenSteps.add(candidate.stepId);
+      candidates.push({ stepId: candidate.stepId, multiplicity: candidate.multiplicity });
     }
-    states.push({ files: [...state.files], candidateStepIds: [...state.candidateStepIds], probability: state.probability });
+
+    states.push({ files: [...state.files], candidates, probability: state.probability });
   }
+
   if (!distribution(states.map((state) => state.probability))) return;
+
   const selectedState = states[trace.selectedStateIndex];
-  if (selectedState.probability === 0 || trace.candidates.length !== selectedState.candidateStepIds.length) return;
+  if (selectedState.probability === 0 || trace.candidates.length !== selectedState.candidates.length) return;
 
   const candidates: SelectionTrace["candidates"] = [];
   for (let index = 0; index < trace.candidates.length; index++) {
     const candidate = record(trace.candidates[index]);
-    if (candidate?.stepId !== selectedState.candidateStepIds[index] ||
+
+    if (candidate?.stepId !== selectedState.candidates[index].stepId ||
         typeof candidate?.reasoningScore !== "number" || !Number.isSafeInteger(candidate.reasoningScore) ||
         candidate.reasoningScore < 0 || !probability(candidate.probability)) return;
+
     candidates.push({ stepId: candidate.stepId, reasoningScore: candidate.reasoningScore, probability: candidate.probability });
   }
+
   if (!distribution(candidates.map((candidate) => candidate.probability)) ||
       !candidates.some((candidate) => candidate.stepId === trace.selectedStepId && candidate.probability > 0)) return;
+
   return {
-    policyVersion: 1, eligibilityPolicy: "all-recorded-completed-steps", states,
+    policyVersion: 1, eligibilityPolicy: "passed-trajectory-occurrences", states,
     selectedStateIndex: trace.selectedStateIndex, candidates, selectedStepId: trace.selectedStepId,
   };
 }

@@ -29,28 +29,44 @@ function archive() {
   ];
 }
 
+const archivedEligibility = new Map(["a1", "a2", "a3", "b1", "b2"].map((id) => [id, 1]));
+
 test("groups archived steps by pre-step file sets, skipping empty states", () => {
   const entries = archive();
-  assert.deepEqual(rollUpExplorationStates(entries, "root"), [
-    { files: ["/a"], candidateStepIds: ["a2"] },
-    { files: ["/a", "/b"], candidateStepIds: ["a3", "b2"] },
+  assert.deepEqual(rollUpExplorationStates(entries, "root", archivedEligibility), [
+    { files: ["/a"], candidates: [{ stepId: "a2", multiplicity: 1 }] },
+    { files: ["/a", "/b"], candidates: [{ stepId: "a3", multiplicity: 1 }, { stepId: "b2", multiplicity: 1 }] },
   ]);
   assert.deepEqual(entries[8].data.files, ["/b", "/a", "/a"]);
 });
 
 test("filters eligibility before grouping while retaining ancestors for pre-step state", () => {
-  assert.deepEqual(rollUpExplorationStates(archive(), "root", new Set(["a3"])), [
-    { files: ["/a", "/b"], candidateStepIds: ["a3"] },
+  assert.deepEqual(rollUpExplorationStates(archive(), "root", new Map([["a3", 1]])), [
+    { files: ["/a", "/b"], candidates: [{ stepId: "a3", multiplicity: 1 }] },
   ]);
-  assert.deepEqual(rollUpExplorationStates(archive(), "root", new Set()), []);
+  assert.deepEqual(rollUpExplorationStates(archive(), "root", new Map()), []);
 });
 
-test("follows parent IDs rather than storage order and deduplicates concrete steps", () => {
+test("follows parent IDs rather than storage order and deduplicates repeated snapshots", () => {
   const entries = archive();
   entries.push(snapshot("duplicate", "s3", "a3", ["/different"]));
-  const states = rollUpExplorationStates(entries.reverse(), "root");
-  assert.deepEqual(states.find((state) => state.files.length === 2)?.candidateStepIds.sort(), ["a3", "b2"]);
-  assert.deepEqual(states.find((state) => state.files.length === 1)?.candidateStepIds, ["a2"]);
+  const eligible = new Map([
+    ["a2", 1],
+    ["a3", 2],
+    ["b2", 1],
+  ]);
+
+  const states = rollUpExplorationStates(entries.reverse(), "root", eligible);
+  const sharedState = states.find((state) => state.files.length === 2);
+  const singleFileState = states.find((state) => state.files.length === 1);
+
+  assert.deepEqual(sharedState?.files, ["/a", "/b"]);
+  assert.deepEqual(sharedState?.candidates.toSorted((a, b) => a.stepId.localeCompare(b.stepId)), [
+    { stepId: "a3", multiplicity: 2 },
+    { stepId: "b2", multiplicity: 1 },
+  ]);
+  assert.deepEqual(singleFileState?.files, ["/a"]);
+  assert.deepEqual(singleFileState?.candidates, [{ stepId: "a2", multiplicity: 1 }]);
 });
 
 test("isolates roots, rejects dangling/non-assistant IDs, and excludes nested runs", () => {
@@ -64,11 +80,16 @@ test("isolates roots, rejects dangling/non-assistant IDs, and excludes nested ru
     snapshot("wrong-root", "o2", "other2", ["/a"]),
     step("orphan", "missing"), snapshot("orphan-snapshot", "orphan", "orphan", ["/a"]),
   );
-  assert.deepEqual(rollUpExplorationStates(entries, "root"), rollUpExplorationStates(archive(), "root"));
-  assert.deepEqual(rollUpExplorationStates(entries, "other"), [
-    { files: ["/other"], candidateStepIds: ["other2"] },
+  const eligible = new Map([
+    ...archivedEligibility,
+    ...["other1", "other2", "missing", "s1", "orphan"].map((id) => [id, 1]),
   ]);
-  assert.deepEqual(rollUpExplorationStates(entries, "missing-root"), []);
+
+  assert.deepEqual(rollUpExplorationStates(entries, "root", eligible), rollUpExplorationStates(archive(), "root", archivedEligibility));
+  assert.deepEqual(rollUpExplorationStates(entries, "other", eligible), [
+    { files: ["/other"], candidates: [{ stepId: "other2", multiplicity: 1 }] },
+  ]);
+  assert.deepEqual(rollUpExplorationStates(entries, "missing-root", eligible), []);
 });
 
 test("ignores malformed snapshots and steps without a completed-turn snapshot", () => {
@@ -78,5 +99,7 @@ test("ignores malformed snapshots and steps without a completed-turn snapshot", 
     { ...snapshot("bad", "s3", "unfinished", [42]) },
     { id: "empty", type: "custom", customType: "swe-replay-turn-files" },
   );
-  assert.deepEqual(rollUpExplorationStates(entries, "root"), rollUpExplorationStates(archive(), "root"));
+  const eligible = new Map([...archivedEligibility, ["unfinished", 1]]);
+
+  assert.deepEqual(rollUpExplorationStates(entries, "root", eligible), rollUpExplorationStates(archive(), "root", archivedEligibility));
 });

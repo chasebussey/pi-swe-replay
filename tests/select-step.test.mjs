@@ -24,8 +24,8 @@ function draws(...values) {
 }
 
 const states = [
-  { files: ["/a"], candidateStepIds: ["a"] },
-  { files: ["/b"], candidateStepIds: ["b", "c", "d"] },
+  { files: ["/a"], candidates: [{ stepId: "a", multiplicity: 1 }] },
+  { files: ["/b"], candidates: ["b", "c", "d"].map((stepId) => ({ stepId, multiplicity: 1 })) },
 ];
 const session = sessionWith({ a: 0, b: 0, c: 0, d: 0 });
 
@@ -37,7 +37,10 @@ test("samples states using softmax of inverse group size, not uniform or flatten
 });
 
 test("samples within the chosen state using softmax of paragraph counts", () => {
-  const state = { files: ["/a"], candidateStepIds: ["short", "long"] };
+  const state = {
+    files: ["/a"],
+    candidates: ["short", "long"].map((stepId) => ({ stepId, multiplicity: 1 })),
+  };
   const session = sessionWith({ short: 1, long: 3 });
   const boundary = Math.exp(1) / (Math.exp(1) + Math.exp(3));
   for (const [draw, stepId, score] of [[boundary - 1e-9, "short", 1], [boundary + 1e-9, "long", 3]]) {
@@ -50,14 +53,43 @@ test("samples within the chosen state using softmax of paragraph counts", () => 
   }
 });
 
-test("zero reasoning scores give uniform step probabilities", () => {
+test("zero reasoning scores give uniform step probabilities when multiplicities are equal", () => {
+  const state = {
+    files: ["/b"],
+    candidates: ["b", "c", "d"].map((stepId) => ({ stepId, multiplicity: 1 })),
+  };
+
   for (const [draw, expected] of [[0, "b"], [0.34, "c"], [1 - Number.EPSILON, "d"]]) {
-    assert.equal(selectExploitationStep([states[1]], session, draws(0, draw)).stepId, expected);
+    const result = selectExploitationStep([state], session, draws(0, draw));
+    assert.equal(result.stepId, expected);
+    for (const candidate of result.trace.candidates) {
+      assert.ok(Math.abs(candidate.probability - 1 / 3) < 1e-15);
+    }
+  }
+});
+
+test("zero reasoning scores give step probabilities proportional to multiplicity", () => {
+  const state = {
+    files: ["/b"],
+    candidates: [
+      { stepId: "b", multiplicity: 1 },
+      { stepId: "c", multiplicity: 3 },
+    ],
+  };
+
+  for (const [draw, expected] of [[0.25 - 1e-9, "b"], [0.25 + 1e-9, "c"]]) {
+    const result = selectExploitationStep([state], session, draws(0, draw));
+    assert.equal(result.stepId, expected);
+    assert.ok(Math.abs(result.trace.candidates[0].probability - 0.25) < 1e-15);
+    assert.ok(Math.abs(result.trace.candidates[1].probability - 0.75) < 1e-15);
   }
 });
 
 test("uses numerically stable softmax even for very large paragraph counts", () => {
-  const state = { files: ["/a"], candidateStepIds: ["low", "high"] };
+  const state = {
+    files: ["/a"],
+    candidates: ["low", "high"].map((stepId) => ({ stepId, multiplicity: 1 })),
+  };
   const session = sessionWith({ low: 1000, high: 1001 });
   const boundary = 1 / (1 + Math.E);
   assert.equal(selectExploitationStep([state], session, draws(0, boundary - 1e-9)).stepId, "low");
@@ -68,8 +100,8 @@ test("uses numerically stable softmax even for very large paragraph counts", () 
 
 test("skips empty states and returns undefined without drawing if none are eligible", () => {
   const empty = [
-    { files: [], candidateStepIds: ["missing"] },
-    { files: ["/empty"], candidateStepIds: [] },
+    { files: [], candidates: [{ stepId: "missing", multiplicity: 1 }] },
+    { files: ["/empty"], candidates: [] },
   ];
   assert.equal(selectExploitationStep([], session, draws()), undefined);
   assert.equal(selectExploitationStep(empty, session, draws()), undefined);
@@ -81,7 +113,7 @@ test("skips empty states and returns undefined without drawing if none are eligi
 
 test("invalid candidate references and out-of-range random values fail explicitly", () => {
   assert.throws(() => selectExploitationStep([
-    { files: ["/a"], candidateStepIds: ["missing"] },
+    { files: ["/a"], candidates: [{ stepId: "missing", multiplicity: 1 }] },
   ], session, draws(0)), /assistant message entry: missing/);
   for (const value of [-0.1, 1, NaN, Infinity]) {
     assert.throws(() => selectExploitationStep(states, session, draws(value)), /Selection RNG/);

@@ -53,15 +53,19 @@ function decisionRows(view: ReplayView): Row[] {
       `Recorded score: ${decision.recordedScore ?? "unavailable"}`,
       ...(decision.fallbackReason ? [`Fallback: ${decision.fallbackReason}`] : []),
       decision.traceNote,
-      "Eligibility: recorded completed steps; no regression filtering.",
-      ...decision.states.flatMap((state, index) => [
-        "", `State ${index + 1}${state.selected ? " ← selected" : ""}: ${state.candidates.length} candidates · P(state) ${percent(state.probability)}`,
-        ...state.files,
-        ...(decision.probabilitySource === "recorded" && !state.selected ? ["Conditional scores/probabilities not evaluated for this state."] : []),
-        ...state.candidates.map((candidate) => decision.probabilitySource === "recorded" && !state.selected
-          ? `  ${candidate.id}`
-          : `${candidate.id === decision.selectedStepId ? "→ " : "  "}${candidate.id}: recorded paragraphs ${candidate.score ?? "?"} · P(step | state) ${percent(candidate.probability)}`),
-      ]),
+      "Candidates and multiplicities reflect the archive at selection time.",
+      ...decision.states.flatMap((state, index) => {
+        const occurrenceCount = state.candidates.reduce((sum, candidate) => sum + candidate.multiplicity, 0);
+
+        return [
+          "", `State ${index + 1}${state.selected ? " ← selected" : ""}: ${state.candidates.length} unique candidates · ${occurrenceCount} trajectory occurrences · P(state) ${percent(state.probability)}`,
+          ...state.files,
+          ...(decision.probabilitySource === "recorded" && !state.selected ? ["Conditional scores/probabilities not evaluated for this state."] : []),
+          ...state.candidates.map((candidate) => decision.probabilitySource === "recorded" && !state.selected
+            ? `  ${candidate.id} · multiplicity ${candidate.multiplicity}`
+            : `${candidate.id === decision.selectedStepId ? "→ " : "  "}${candidate.id}: multiplicity ${candidate.multiplicity} · recorded paragraphs ${candidate.score ?? "?"} · P(step | state) ${percent(candidate.probability)}`),
+        ];
+      }),
       ...(decision.states.length === 0 ? ["No candidate groups recorded."] : []),
       ...(decision.outcome === "step-selected" ? ["Replacement target selected; this decision does not record generation completion."] : []),
     ].join("\n"),

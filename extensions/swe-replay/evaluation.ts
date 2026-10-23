@@ -55,19 +55,26 @@ export async function evaluateSnapshot(
 /** Passing descendant trajectories keep shared prefix steps eligible. */
 export function eligibleStepIds(
   entries: readonly SessionEntry[], rootEntryId: string, terminalEntryIds: readonly string[],
-): Set<string> {
+): Map<string, number> {
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const eligible = new Set<string>();
+  const eligible = new Map<string, number>();
+
   for (const terminal of terminalEntryIds) {
     const path = new Set<string>();
     let id: string | null = terminal;
+
     while (id && id !== rootEntryId && !path.has(id)) {
       path.add(id);
       const entry = byId.get(id);
       if (!entry || (entry.type === "custom" && entry.customType === "swe-replay-root")) break;
       id = entry.parentId;
     }
-    if (id === rootEntryId) for (const stepId of path) eligible.add(stepId);
+
+    if (id === rootEntryId) {
+      for (const stepId of path) {
+        eligible.set(stepId, (eligible.get(stepId) ?? 0) + 1);
+      }
+    }
   }
   return eligible;
 }

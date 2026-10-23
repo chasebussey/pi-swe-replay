@@ -1,0 +1,18 @@
+[
+  {
+    "label": "Debug dashboard selection and views",
+    "adapter": "JavaScript",
+    "type": "pwa-node",
+    "request": "launch",
+    "runtimeExecutable": "node",
+    "runtimeArgs": [
+      "--test",
+      "--test-name-pattern=^dashboard supports selection, views, detail paging, opt-in reveal, and close$"
+    ],
+    "program": "${ZED_WORKTREE_ROOT}/tests/visualization-ui.test.mjs",
+    "cwd": "${ZED_WORKTREE_ROOT}",
+    "console": "integratedTerminal",
+    "autoAttachChildProcesses": true,
+    "skipFiles": ["<node_internals>/**"]
+  }
+]

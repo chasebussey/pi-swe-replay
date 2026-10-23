@@ -16,7 +16,7 @@ export interface DecisionStateView {
   files: string[];
   selected: boolean;
   probability?: number;
-  candidates: { id: string; score?: number; probability?: number }[];
+  candidates: { id: string; multiplicity: number; score?: number; probability?: number }[];
 }
 
 export interface ReplayDecisionView {
@@ -204,8 +204,10 @@ export function buildReplayView(
       const selectedStateIndex = trace.selectedStateIndex;
       decision.states = trace.states.map((state, index) => ({
         files: [...state.files], selected: index === selectedStateIndex, probability: state.probability,
-        candidates: state.candidateStepIds.map((id) => ({
-          id, score: candidates.get(id)?.reasoningScore, probability: candidates.get(id)?.probability,
+        candidates: state.candidates.map((candidate) => ({
+          id: candidate.stepId, multiplicity: candidate.multiplicity,
+          score: candidates.get(candidate.stepId)?.reasoningScore,
+          probability: candidates.get(candidate.stepId)?.probability,
         })),
       }));
     } else {
@@ -216,14 +218,31 @@ export function buildReplayView(
       let validStates = Array.isArray(data?.states);
       for (const raw of Array.isArray(data?.states) ? data.states : []) {
         const state = record(raw);
-        if (!strings(state?.files) || !strings(state?.candidateStepIds)) { validStates = false; continue; }
-        if (state.files.length === 0 || state.candidateStepIds.length === 0) continue;
-        if (new Set(state.candidateStepIds).size !== state.candidateStepIds.length) validStates = false;
+        if (!strings(state?.files) || !Array.isArray(state?.candidates)) { validStates = false; continue; }
+        if (state.files.length === 0 || state.candidates.length === 0) continue;
+
+        const candidates: DecisionStateView["candidates"] = [];
+        const seenSteps = new Set<string>();
+        let validCandidates = true;
+        for (const rawCandidate of state.candidates) {
+          const candidate = record(rawCandidate);
+          const multiplicity = positiveInteger(candidate?.multiplicity);
+          if (typeof candidate?.stepId !== "string" || multiplicity === undefined || seenSteps.has(candidate.stepId)) {
+            validCandidates = false;
+            break;
+          }
+
+          seenSteps.add(candidate.stepId);
+          candidates.push({
+            id: candidate.stepId, multiplicity,
+            score: candidate.stepId === decision.selectedStepId ? decision.recordedScore : undefined,
+          });
+        }
+        if (!validCandidates) { validStates = false; continue; }
+
         decision.states.push({
-          files: files(state.files), selected: state.candidateStepIds.includes(decision.selectedStepId ?? ""),
-          candidates: state.candidateStepIds.map((id) => ({
-            id, score: id === decision.selectedStepId ? decision.recordedScore : undefined,
-          })),
+          files: files(state.files), selected: candidates.some((candidate) => candidate.id === decision.selectedStepId),
+          candidates,
         });
       }
       if (!validStates) view.diagnostics.push(`Decision ${entry.id} has incomplete candidate groups.`);
@@ -257,6 +276,6 @@ export function replaySummary(view: ReplayView): string {
     `${view.steps.length} recorded steps; ${view.decisions.length} exploitation decisions`,
     ...view.decisions.map((decision) => `Iteration ${decision.iteration ?? "?"}: ${decision.outcome}${decision.selectedStepId ? ` → ${decision.selectedStepId}` : ""}${decision.fallbackReason ? ` (${decision.fallbackReason})` : ""}`),
     ...view.diagnostics.map((message) => `Warning: ${message}`),
-    "Read-only snapshot. Decisions record selection, not generation completion; patches are not evaluated.",
+    "Read-only snapshot. Decisions record selection, not generation completion; regression outcomes are not displayed here.",
   ].join("\n");
 }

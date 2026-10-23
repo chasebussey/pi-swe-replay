@@ -9,8 +9,8 @@ const { parseSelectionTrace } = await jiti.import("../extensions/swe-replay/sele
 
 function select(draw) {
   const states = [
-    { files: ["/a"], candidateStepIds: ["a"] },
-    { files: ["/b"], candidateStepIds: ["b", "c"] },
+    { files: ["/a"], candidates: [{ stepId: "a", multiplicity: 1 }] },
+    { files: ["/b"], candidates: [{ stepId: "b", multiplicity: 1 }, { stepId: "c", multiplicity: 1 }] },
   ];
   const scores = { b: 0, c: 2 };
   const lookups = [];
@@ -37,11 +37,14 @@ test("trace captures both distributions actually used, including all state membe
     const trace = JSON.parse(JSON.stringify(result.trace));
     assert.deepEqual(parseSelectionTrace(trace), trace);
     assert.equal(trace.policyVersion, 1);
-    assert.equal(trace.eligibilityPolicy, "all-recorded-completed-steps");
+    assert.equal(trace.eligibilityPolicy, "passed-trajectory-occurrences");
     assert.equal(trace.selectedStateIndex, 1);
     assert.equal(trace.selectedStepId, expected);
     assert.equal(result.stepId, expected);
-    assert.deepEqual(trace.states.map((state) => state.candidateStepIds), [["a"], ["b", "c"]]);
+    assert.deepEqual(trace.states.map((state) => state.candidates), [
+      [{ stepId: "a", multiplicity: 1 }],
+      [{ stepId: "b", multiplicity: 1 }, { stepId: "c", multiplicity: 1 }],
+    ]);
     assert.ok(Math.abs(trace.states[0].probability - 1 / (1 + Math.exp(-0.5))) < 1e-15);
     assert.ok(Math.abs(trace.candidates[0].probability - boundary) < 1e-15);
     assert.deepEqual(trace.candidates.map((candidate) => candidate.reasoningScore), [0, 2]);
@@ -53,10 +56,14 @@ test("trace is a detached, JSON-safe snapshot of mutable state groups", () => {
   const { states, result } = select(0.99);
   const before = JSON.parse(JSON.stringify(result.trace));
   states[0].files.push("/later");
-  states[1].candidateStepIds.push("later");
+  states[1].candidates[0].multiplicity = 3;
+  states[1].candidates.push({ stepId: "later", multiplicity: 1 });
   assert.deepEqual(result.trace, before);
+
   const parsed = parseSelectionTrace(before);
   parsed.states[0].files.push("/ui-change");
+  parsed.states[1].candidates[0].multiplicity = 5;
+  assert.equal(before.states[1].candidates[0].multiplicity, 1);
   assert.notDeepEqual(parsed, before);
   assert.deepEqual(result.trace, before);
 });
@@ -75,7 +82,7 @@ test("trace parsing rejects unsupported, malformed, and inconsistent records wit
     (trace) => { trace.states[0].files = []; },
     (trace) => { trace.states[0].probability = Infinity; },
     (trace) => { trace.states[0].probability = 0.5; },
-    (trace) => { trace.states[0].candidateStepIds = ["a2", "a2"]; },
+    (trace) => { trace.states[0].candidates[1].stepId = trace.states[0].candidates[0].stepId; },
     (trace) => { trace.states.push(structuredClone(trace.states[0])); },
     (trace) => { trace.candidates.pop(); },
     (trace) => { trace.candidates.reverse(); },

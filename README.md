@@ -25,7 +25,7 @@ The command runs first against the initial snapshot, which must pass, then again
 
 This runs five iterations. Each iteration generates a trajectory (roughly a session branch). Failed validation excludes a trajectory's unique steps from exploitation; shared prefixes remain eligible if they also belong to a passing trajectory. Timeouts or execution errors stop replay as inconclusive. Evaluation output is persisted outside model context, accessible through `/inspect-session`, not sent to the coding agent.
 
-Worktrees share Git metadata and OS permissions: this is not a security sandbox. Use a trusted command that does not mutate shared refs, the original checkout, or external resources. The final checkout remains the last generated candidate, even when validation fails. See [the validation design](regression-validation-design.md) for the full contract and limitations.
+Worktrees share Git metadata and OS permissions: this is not a security sandbox. Use a trusted command that does not mutate shared refs, the original checkout, or external resources. The final checkout remains the last generated candidate, even when validation fails. See [the validation design](docs/regression-validation-design.md) for the full contract and limitations.
 
 ### Commands
 
@@ -113,7 +113,9 @@ The details show the probabilities recorded when selection happened:
 - **`P(state)`** is the probability of choosing a file-exploration state after exploitation was chosen.
 - **`P(step | state)`** is the probability of choosing a particular step within that state.
 
-Neither is the probability of choosing exploration versus exploitation. Older records without selection traces show probabilities as unavailable.
+Neither is the probability of choosing exploration versus exploitation. Details also show each candidate’s multiplicity and each state’s total trajectory occurrences at selection time. Missing, invalid, or unsupported selection traces show probabilities as unavailable; the viewer does not reconstruct them.
+
+Current traces use candidate objects containing `stepId` and `multiplicity`, policy version `1`, and eligibility policy `passed-trajectory-occurrences`. The parser validates that eligibility label rather than reinterpreting traces recorded under another policy. Historical trace schemas are not automatically migrated.
 
 ### Controls
 
@@ -133,23 +135,23 @@ The Runs view also shows diagnostics for missing or malformed records. Older run
 
 Selection happens in two stages.
 
-First, completed steps are grouped by the set of repository files explored **before** each step. Paths are absolute, sorted, and deduplicated. Steps with an empty pre-step file set are excluded.
+First, completed steps on passing trajectories are grouped by the set of repository files explored **before** each step. Paths are absolute, sorted, and deduplicated. Steps with an empty pre-step file set are excluded. Each unique assistant step has a **multiplicity**: the number of passing archived trajectories containing it.
 
 A file-state group is sampled using softmax over inverse group size:
 
 ```text
-P(stateᵢ) ∝ exp(1 / number of steps in stateᵢ)
+P(stateᵢ) ∝ exp(1 / sum of candidate multiplicities in stateᵢ)
 ```
 
-This favors states reached by fewer concrete steps.
+This favors states with fewer step occurrences across passing trajectories. A shared step counts once per passing trajectory containing it, while remaining a single candidate in the session tree.
 
-Within that group, a step is sampled using softmax over its visible reasoning paragraph count:
+Within that group, a unique step is sampled using multiplicity-weighted softmax over its visible reasoning paragraph count:
 
 ```text
-P(step | state) ∝ exp(reasoning paragraph count)
+P(step | state) ∝ multiplicity × exp(reasoning paragraph count)
 ```
 
-Reasoning paragraphs are separated by blank lines and counted across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning do not contribute. A valid response without visible reasoning scores zero.
+Reasoning paragraphs are separated by blank lines and counted across thinking blocks. Ordinary assistant text, tool calls, and redacted reasoning do not contribute. A valid response without visible reasoning scores zero. Equal scores produce probabilities proportional to multiplicity; they are uniform over unique steps only when multiplicities are equal.
 
 These are sampling weights, not quality scores. For new runs, only steps on at least one passing trajectory are eligible. Filtering happens before group sizes and sampling probabilities are computed. A passing baseline is required; nonzero candidate exits fail the user's validation gate, but do not independently prove a test regression.
 
@@ -157,7 +159,7 @@ These are sampling weights, not quality scores. For new runs, only steps on at l
 
 Successful `read`, `write`, and `edit` calls contribute to a branch’s cumulative file-exploration set. Failed calls and shell-based file accesses do not.
 
-A step’s grouping key excludes its own accesses. Shared steps are counted once, and sibling branches do not inherit each other’s file sets.
+A step’s grouping key excludes its own accesses, and sibling branches do not inherit each other’s file sets. Repeated snapshots of the same assistant step do not create extra candidates or increase its multiplicity. Multiplicity comes from passing terminal paths, not snapshot count; failed trajectories add no weight.
 
 ## Workspace snapshots and safety
 
@@ -242,4 +244,4 @@ npx --no-install tsc --noEmit
 node --test tests/*.test.mjs
 ```
 
-Tests use Node.js’s built-in test runner and `jiti`, without emitting build artifacts. They do not establish provider compatibility; use a disposable repository/session for live smoke testing.
+Tests use Node.js’s built-in test runner and `jiti`, without emitting build artifacts. Tests do not establish provider compatibility; use a disposable repository/session for live smoke testing.

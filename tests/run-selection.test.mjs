@@ -135,7 +135,9 @@ test("exploitation restores pre-step context and continues via an empty custom m
   assert.equal(persisted.trace.policyVersion, 1);
   assert.equal(persisted.trace.selectedStepId, persisted.selection.stepId);
   assert.deepEqual(persisted.trace.states, [{
-    files: [join(h.ctx.cwd, "a")], candidateStepIds: [persisted.selection.stepId], probability: 1,
+    files: [join(h.ctx.cwd, "a")],
+    candidates: [{ stepId: persisted.selection.stepId, multiplicity: 1 }],
+    probability: 1,
   }]);
   assert.deepEqual(persisted.trace.candidates, [{
     stepId: persisted.selection.stepId, reasoningScore: 1, probability: 1,
@@ -163,6 +165,15 @@ test("exploitation restores pre-step context and continues via an empty custom m
   assert.equal(h.entries.some((entry) => entry.id === selected.id), true);
   assert.equal(h.entries.some((entry) => entry.message?.toolCallId === "tool-1"), true);
   assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
+});
+
+test("persisted selection traces identify the passed-trajectory-occurrences eligibility policy", async (t) => {
+  t.mock.method(Math, "random", () => 0.9);
+  const h = harness(true, t);
+  await runSweReplay(h.pi, h.ctx, 2, "task");
+
+  const log = h.entries.find((entry) => entry.customType === "swe-replay-exploit-log").data;
+  assert.equal(log.trace.eligibilityPolicy, "passed-trajectory-occurrences");
 });
 
 test("later exploitation can replace a generated step while retaining its empty trigger", async (t) => {

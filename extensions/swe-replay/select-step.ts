@@ -39,28 +39,41 @@ export function selectExploitationStep(
   sessionManager: Pick<ExtensionContext["sessionManager"], "getEntry">,
   random: () => number = Math.random,
 ): ExploitationSelection | undefined {
-  const eligible = states.filter((state) => state.files.length > 0 && state.candidateStepIds.length > 0);
+  const eligible = states.filter((state) => state.files.length > 0 && state.candidates.length > 0);
   if (eligible.length === 0) return;
 
   // All recorded completed steps are provisionally eligible until regression evaluation exists.
-  const stateProbabilities = softmaxProbabilities(eligible.map((state) => 1 / state.candidateStepIds.length));
+  const stateLogits = eligible.map((state) => {
+    // get the total number of step occurrences for all candidates
+    const occurrenceCount = state.candidates.reduce((sum, candidate) => sum + candidate.multiplicity, 0);
+
+    return 1 / occurrenceCount;
+  });
+
+  const stateProbabilities = softmaxProbabilities(stateLogits);
+
   const selectedStateIndex = sampleProbabilities(stateProbabilities, random);
   const state = eligible[selectedStateIndex];
-  const scores = state.candidateStepIds.map((stepId) => reasoningScore(stepId, sessionManager));
-  const stepProbabilities = softmaxProbabilities(scores);
+
+  const scores = state.candidates.map((candidate) => reasoningScore(candidate.stepId, sessionManager));
+  const stepLogits = scores.map((score, index) => score + Math.log(state.candidates[index].multiplicity));
+  const stepProbabilities = softmaxProbabilities(stepLogits);
+
   const index = sampleProbabilities(stepProbabilities, random);
-  const stepId = state.candidateStepIds[index];
+  const stepId = state.candidates[index].stepId;
+
   const trace: SelectionTrace = {
     policyVersion: 1,
-    eligibilityPolicy: "all-recorded-completed-steps",
+    eligibilityPolicy: "passed-trajectory-occurrences",
     states: eligible.map((state, index) => ({
-      files: [...state.files], candidateStepIds: [...state.candidateStepIds], probability: stateProbabilities[index],
+      files: [...state.files], candidates: state.candidates.map((candidate) => ({ ...candidate })), probability: stateProbabilities[index],
     })),
     selectedStateIndex,
-    candidates: state.candidateStepIds.map((stepId, index) => ({
-      stepId, reasoningScore: scores[index], probability: stepProbabilities[index],
+    candidates: state.candidates.map((candidate, index) => ({
+      stepId: candidate.stepId, reasoningScore: scores[index], probability: stepProbabilities[index],
     })),
     selectedStepId: stepId,
   };
+
   return { state, stepId, reasoningScore: scores[index], trace };
 }

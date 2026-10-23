@@ -78,42 +78,68 @@ test("isolates sibling/nested runs, including falsely attributed snapshots and d
   assert.equal(buildReplayView(entries, "nested").decisions.length, 1);
 });
 
-test("legacy decisions keep probabilities unavailable and use only recorded scores", () => {
+test("no-eligible-states fallback projects as one exploration-fallback decision", () => {
   const entries = archive();
-  entries.push(decision("broken", "s2", {
-    rootEntryId: "root", iteration: 4,
-    states: [{ files: ["/repo/a"], candidateStepIds: ["a2", "missing"] }],
-    selection: { stepId: "missing", reasoningScore: 5 },
+  const before = buildReplayView(entries, "root");
+  entries.push(decision("fallback", "s2", {
+    rootEntryId: "root", iteration: 4, states: [], selection: null, trace: null,
+    fallbackReason: "no-eligible-states",
   }));
+
   const view = buildReplayView(entries, "root");
-  const state = view.decisions[1].states[0];
-  assert.equal(state.probability, undefined); // Membership is not a recorded distribution.
-  assert.equal(view.decisions[1].probabilitySource, "unavailable");
-  assert.match(view.decisions[1].traceNote, /no selection trace/);
-  assert.equal(state.candidates[0].score, undefined);
-  assert.equal(state.candidates[1].score, 5);
-  assert.deepEqual(state.candidates.map((candidate) => candidate.probability), [undefined, undefined]);
-  assert.ok(view.diagnostics.some((message) => message.includes("missing")));
+  const added = view.decisions.filter((item) => item.id === "fallback");
+  assert.equal(view.decisions.length, before.decisions.length + 1);
+  assert.equal(added.length, 1);
+  assert.equal(added[0].outcome, "explore-fallback");
+  assert.equal(added[0].fallbackReason, "no-eligible-states");
+  assert.equal(added[0].selectedStepId, undefined);
+  assert.equal(added[0].probabilitySource, "unavailable");
+  assert.deepEqual(added[0].states, []);
+  assert.deepEqual(view.diagnostics, []);
+  assert.match(replaySummary(view), /no-eligible-states/);
 });
 
-test("legacy/malformed records degrade to diagnostics; fallback remains one decision", () => {
+test("malformed decisions remain inspectable and produce diagnostics", () => {
   const entries = archive();
   entries.push(
-    decision("legacy", "s2", undefined),
-    decision("fallback", "s2", { rootEntryId: "root", iteration: 4, states: [], selection: null, fallbackReason: "no-eligible-states" }),
+    decision("missing-data", "s2", undefined),
     decision("bad-groups", "s2", { rootEntryId: "root", iteration: 5, states: [{ files: [42] }] }),
+  );
+
+  const view = buildReplayView(entries, "root");
+  assert.equal(view.decisions.length, 3);
+  for (const id of ["missing-data", "bad-groups"]) {
+    const malformed = view.decisions.find((item) => item.id === id);
+    assert.ok(malformed, `Decision ${id} should remain visible.`);
+    assert.equal(malformed.outcome, "unknown");
+    assert.equal(malformed.probabilitySource, "unavailable");
+    assert.deepEqual(malformed.states, []);
+    assert.ok(view.diagnostics.includes(`Decision ${id} has incomplete candidate groups.`));
+  }
+});
+
+test("malformed snapshots do not supply pre-step file state", () => {
+  const entries = archive();
+  entries.push(
     snapshot("bad-snapshot", "s2", "missing", ["/a"]),
     snapshot("bad-files", "s2", "a2", [42]),
     step("after-bad", "bad-files"), snapshot("after-bad-snapshot", "after-bad", "after-bad", ["/a"]),
   );
+
   const view = buildReplayView(entries, "root");
-  assert.equal(view.decisions.length, 4);
-  assert.equal(view.decisions[1].outcome, "unknown");
-  assert.equal(view.decisions[2].outcome, "explore-fallback");
-  assert.equal(view.steps.find((step) => step.id === "after-bad").filesBefore, undefined);
-  assert.ok(view.diagnostics.length >= 3);
-  assert.match(replaySummary(view), /no-eligible-states/);
-  assert.match(buildReplayView(entries, "missing").diagnostics[0], /root is missing/);
+  const subsequent = view.steps.find((item) => item.id === "after-bad");
+  assert.ok(subsequent);
+  assert.equal(subsequent.filesBefore, undefined);
+  assert.ok(!view.steps.some((item) => item.id === "missing"));
+  assert.ok(view.diagnostics.includes("Invalid step reference in snapshot bad-snapshot."));
+  assert.ok(view.diagnostics.includes("Malformed turn snapshot bad-files."));
+});
+
+test("missing replay roots produce a diagnostic", () => {
+  const view = buildReplayView(archive(), "missing");
+  assert.deepEqual(view.steps, []);
+  assert.deepEqual(view.decisions, []);
+  assert.deepEqual(view.diagnostics, ["Replay root is missing or invalid."]);
 });
 
 test("cycles, cross-branch references, and invalid assistant content do not crash projection", () => {

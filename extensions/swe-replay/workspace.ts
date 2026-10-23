@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
@@ -85,6 +85,12 @@ export class ReplayWorkspace {
 
   /** Materialize a snapshot without replacing files in the active checkout. */
   async withEvaluationWorkspace<T>(snapshot: WorkspaceSnapshot, cwd: string, evaluate: (directory: string) => Promise<T>): Promise<T> {
+    // Git may canonicalize aliases such as macOS /var -> /private/var.
+    // Resolve both paths before computing an offset into the disposable worktree.
+    const offset = relative(await realpath(this.cwd), await realpath(cwd));
+    if (isAbsolute(offset) || offset === ".." || offset.startsWith(`..${sep}`)) {
+      throw new Error("Evaluation working directory must be inside the replay repository.");
+    }
     const dir = await mkdtemp(join(tmpdir(), "swe-replay-evaluation-"));
     const root = join(dir, "repo");
     let added = false;
@@ -92,7 +98,7 @@ export class ReplayWorkspace {
       await this.git(["worktree", "add", "--detach", root, `${snapshot.oid}^1`]);
       added = true;
       await exec("git", ["stash", "apply", "--index", snapshot.oid], { cwd: root });
-      return await evaluate(join(root, relative(this.cwd, cwd)));
+      return await evaluate(join(root, offset));
     } finally {
       try {
         if (added) await this.git(["worktree", "remove", "--force", root]);

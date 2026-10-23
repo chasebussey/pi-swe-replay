@@ -20,8 +20,15 @@ export const decision = (id, parentId, data) => ({
 export function selectionTrace() {
   const shortProbability = 1 / (1 + Math.exp(2));
   return {
-    policyVersion: 1, eligibilityPolicy: "all-recorded-completed-steps",
-    states: [{ files: ["/repo/a"], candidateStepIds: ["a2", "b2"], probability: 1 }],
+    policyVersion: 1, eligibilityPolicy: "passed-trajectory-occurrences",
+    states: [{
+      files: ["/repo/a"],
+      candidates: [
+        { stepId: "a2", multiplicity: 1 },
+        { stepId: "b2", multiplicity: 1 },
+      ],
+      probability: 1,
+    }],
     selectedStateIndex: 0,
     candidates: [
       { stepId: "a2", reasoningScore: 1, probability: shortProbability },
@@ -39,8 +46,23 @@ export function archive() {
     step("b2", "t1", 3), snapshot("t2", "b2", "b2", ["/repo/a", "/repo/c"], 2),
     decision("decision", "t2", {
       rootEntryId: "root", iteration: 3,
-      states: [{ files: ["/repo/a"], candidateStepIds: ["a2", "b2"] }],
-      selection: { state: { files: ["/repo/a"], candidateStepIds: ["a2", "b2"] }, stepId: "b2", reasoningScore: 3 },
+      states: [{
+        files: ["/repo/a"],
+        candidates: [
+          { stepId: "a2", multiplicity: 1 },
+          { stepId: "b2", multiplicity: 1 },
+        ],
+      }],
+      selection: {
+        state: {
+          files: ["/repo/a"],
+          candidates: [
+            { stepId: "a2", multiplicity: 1 },
+            { stepId: "b2", multiplicity: 1 },
+          ],
+        },
+        stepId: "b2", reasoningScore: 3,
+      },
       trace: selectionTrace(),
     }),
   ];

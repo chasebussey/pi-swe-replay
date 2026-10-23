@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync, realpathSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJiti } from "jiti";
@@ -58,6 +58,39 @@ test("evaluation materializes staged, unstaged, and untracked state without chan
   assert.equal(git("worktree", "list", "--porcelain").match(/^worktree /gm).length, 1);
 });
 
+test("evaluation resolves source directory aliases without escaping the disposable worktree", async (t) => {
+  const { cwd } = repository(t);
+  const aliases = mkdtempSync(join(tmpdir(), "replay-evaluation-alias-"));
+  t.after(() => rmSync(aliases, { recursive: true, force: true }));
+  const alias = join(aliases, "repo");
+  symlinkSync(realpathSync(cwd), alias, "dir");
+  const workspace = await ReplayWorkspace.open(alias);
+  const snapshot = await workspace.capture("root", "step");
+  let evaluationCwd;
+  await workspace.withEvaluationWorkspace(snapshot, join(alias, "subdir"), async (directory) => {
+    evaluationCwd = directory;
+    assert.notEqual(realpathSync(directory), realpathSync(join(cwd, "subdir")));
+    assert.equal(readFileSync(join(directory, "a"), "utf8"), "initial");
+    writeFileSync(join(directory, "a"), "evaluation-only change");
+  });
+  assert.equal(readFileSync(join(cwd, "subdir/a"), "utf8"), "initial");
+  assert.equal(existsSync(evaluationCwd), false);
+});
+
+test("evaluation rejects source directories outside the repository before executing", async (t) => {
+  const { cwd, git } = repository(t);
+  const outside = mkdtempSync(join(tmpdir(), "replay-evaluation-outside-"));
+  t.after(() => rmSync(outside, { recursive: true, force: true }));
+  const workspace = await ReplayWorkspace.open(cwd);
+  const snapshot = await workspace.capture("root", "step");
+  let executed = false;
+  await assert.rejects(workspace.withEvaluationWorkspace(snapshot, outside, async () => {
+    executed = true;
+  }), /must be inside the replay repository/);
+  assert.equal(executed, false);
+  assert.equal(git("worktree", "list", "--porcelain").match(/^worktree /gm).length, 1);
+});
+
 for (const [name, response, expected] of [
   ["nonzero", { code: 1, killed: false, stdout: "x".repeat(20_000), stderr: "failure" }, "failed"],
   ["killed", { code: 0, killed: true, stdout: "", stderr: "" }, "inconclusive"],
@@ -79,6 +112,49 @@ for (const [name, response, expected] of [
   });
 }
 
+const replayRoot = (id = "root", parentId = null) => ({
+  id, parentId, type: "custom", customType: "swe-replay-root",
+});
+const assistantStep = (id, parentId) => ({
+  id, parentId, type: "message", message: { role: "assistant", content: [] },
+});
+
+test("eligibility counts shared steps once per passing trajectory, excluding failed-only branches", () => {
+  const entries = [
+    replayRoot(), assistantStep("shared", "root"),
+    assistantStep("pass", "shared"), assistantStep("pass2", "shared"),
+    assistantStep("fail", "shared"),
+  ];
+
+  const eligible = eligibleStepIds(entries, "root", ["pass", "pass2"]);
+  assert.deepEqual([...eligible].sort(), [["pass", 1], ["pass2", 1], ["shared", 2]]);
+});
+
+test("an archived terminal remains a passing trajectory after acquiring descendants", () => {
+  const entries = [
+    replayRoot(), assistantStep("shared", "root"),
+    assistantStep("original-terminal", "shared"),
+    assistantStep("later-terminal", "original-terminal"),
+  ];
+
+  const eligible = eligibleStepIds(entries, "root", ["original-terminal", "later-terminal"]);
+  assert.deepEqual([...eligible].sort(), [
+    ["later-terminal", 1], ["original-terminal", 2], ["shared", 2],
+  ]);
+});
+
+test("dangling, cyclic, and nested terminal paths do not contribute eligibility counts", () => {
+  const entries = [
+    replayRoot(), assistantStep("shared", "root"), assistantStep("pass", "shared"),
+    assistantStep("dangling", "missing"),
+    assistantStep("cycle1", "cycle2"), assistantStep("cycle2", "cycle1"),
+    replayRoot("nested", "shared"), assistantStep("other", "nested"),
+  ];
+
+  const eligible = eligibleStepIds(entries, "root", ["pass", "dangling", "cycle1", "other", "missing"]);
+  assert.deepEqual([...eligible].sort(), [["pass", 1], ["shared", 1]]);
+});
+
 test("eligibility includes passing shared prefixes but not failed-only branches or other roots", () => {
   const custom = (id, parentId, customType = "other") => ({ id, parentId, type: "custom", customType });
   const entries = [
@@ -86,6 +162,6 @@ test("eligibility includes passing shared prefixes but not failed-only branches 
     custom("pass", "shared"), custom("fail", "shared"),
     custom("nested", "shared", "swe-replay-root"), custom("other", "nested"),
   ];
-  assert.deepEqual([...eligibleStepIds(entries, "root", ["pass", "other"])].sort(), ["pass", "shared"]);
+  assert.deepEqual([...eligibleStepIds(entries, "root", ["pass", "other"])].sort(), [["pass", 1], ["shared", 1]]);
   assert.deepEqual([...eligibleStepIds(entries, "root", [])], []);
 });

@@ -5,7 +5,7 @@ import type { TurnFilesEntry } from "./track-turn-files";
 export interface ExplorationState {
   files: string[];
   /** Assistant message entry IDs, resolvable with sessionManager.getEntry(id). */
-  candidateStepIds: string[];
+  candidates: { stepId: string; multiplicity: number }[];
 }
 
 function turnFiles(entry: SessionEntry): TurnFilesEntry | undefined {
@@ -28,12 +28,11 @@ function turnFiles(entry: SessionEntry): TurnFilesEntry | undefined {
  *
  * Callers may supply eligible step IDs from passing trajectories. Filtering
  * precedes grouping but leaves all ancestors available for state reconstruction.
- * Omitting eligibility retains historical behavior for archive visualization.
  */
 export function rollUpExplorationStates(
   entries: readonly SessionEntry[],
   rootEntryId: string,
-  eligibleSteps?: ReadonlySet<string>,
+  eligibleSteps: ReadonlyMap<string, number>,
 ): ExplorationState[] {
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const states = new Map<string, ExplorationState>();
@@ -42,23 +41,31 @@ export function rollUpExplorationStates(
   for (const entry of entries) {
     const snapshot = turnFiles(entry);
     if (!snapshot || snapshot.rootEntryId !== rootEntryId) continue;
+
     const step = byId.get(snapshot.messageEntryId);
     if (!step || step.type !== "message" || step.message.role !== "assistant") continue;
-    if (eligibleSteps && !eligibleSteps.has(step.id)) continue;
+
+    const multiplicity = eligibleSteps.get(step.id);
+    if (multiplicity === undefined) continue;
+
     if (seenSteps.has(step.id)) continue;
     seenSteps.add(step.id);
 
     let ancestorId = step.parentId;
     let files: string[] | undefined;
+
     while (ancestorId && ancestorId !== rootEntryId) {
       const ancestor = byId.get(ancestorId);
       if (!ancestor) break;
+
       // Do not include a nested/different replay run in this run's archive.
       if (ancestor.type === "custom" && ancestor.customType === "swe-replay-root") break;
+
       const previous = turnFiles(ancestor);
       if (files === undefined && previous?.rootEntryId === rootEntryId) {
         files = previous.files;
       }
+
       ancestorId = ancestor.parentId;
     }
     if (ancestorId !== rootEntryId || !files?.length) continue;
@@ -67,10 +74,10 @@ export function rollUpExplorationStates(
     const key = JSON.stringify(normalizedFiles);
     let state = states.get(key);
     if (!state) {
-      state = { files: normalizedFiles, candidateStepIds: [] };
+      state = { files: normalizedFiles, candidates: [] };
       states.set(key, state);
     }
-    state.candidateStepIds.push(step.id);
+    state.candidates.push({ stepId: step.id, multiplicity });
   }
 
   return [...states.values()];
