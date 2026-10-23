@@ -4,16 +4,20 @@ import { rollUpExplorationStates } from "./exploration-state";
 import { selectExploitationStep } from "./select-step";
 import { ReplayWorkspace, preStepSnapshot, type WorkspaceSnapshot } from "./workspace";
 import { eligibleStepIds, evaluateSnapshot, EVALUATION_TIMEOUT_MS } from "./evaluation";
+import { finalizeReplay, type FinalizedReplay } from "./finalize-run";
+import { appendReplayRecord, type ReplayBaseRecord, type ReplayCandidateRecord, type ReplayEvaluationRecord } from "./replay-records";
 
 interface SweReplayRequest {
   n: number;
   prompt: string;
 }
 
-interface SweReplayRun {
+interface SweReplayRun extends FinalizedReplay {
   requestedPatchCount: number;
   prompt: string;
 }
+
+const activeRuns = new WeakSet<object>();
 
 /**
  * The algorithm's main entry point.
@@ -33,23 +37,34 @@ export async function runSweReplay(
   prompt: string,
   testCommand: string,
 ): Promise<SweReplayRun> {
+  if (!Number.isSafeInteger(n) || n <= 0 || !prompt.trim()) throw new Error("A positive iteration count and prompt are required.");
   if (!testCommand.trim()) throw new Error("A regression test command is required.");
-  const workspace = await ReplayWorkspace.open(ctx.cwd);
-  pi.appendEntry(
-    "swe-replay-root",
-    { prompt, requestedPatchCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS, cwd: ctx.cwd }
-  );
+  if (activeRuns.has(ctx.sessionManager)) throw new Error("A SWE-Replay run is already active in this session.");
+  if (!ctx.isIdle()) throw new Error("Wait for the agent to become idle before starting SWE-Replay.");
 
-  const rootEntry = ctx.sessionManager.getLeafEntry();
-
-  if (!rootEntry) {
-    throw new Error("Root entry was not created.");
+  activeRuns.add(ctx.sessionManager);
+  try {
+    return await executeReplay(pi, ctx, n, prompt, testCommand);
+  } finally {
+    activeRuns.delete(ctx.sessionManager);
   }
+}
 
-  const rootEntryId = rootEntry.id;
+async function executeReplay(
+  pi: ExtensionAPI, ctx: ExtensionCommandContext, n: number, prompt: string, testCommand: string,
+): Promise<SweReplayRun> {
+  const workspace = await ReplayWorkspace.open(ctx.cwd);
+  const rootEntryId = appendReplayRecord(pi, ctx, "swe-replay-root", {
+    schemaVersion: 1, prompt, requestedPatchCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS, cwd: ctx.cwd,
+  });
 
   const initial = await workspace.capture(rootEntryId, rootEntryId);
   pi.appendEntry("swe-replay-workspace", initial);
+  const baseTree = await workspace.contentTree(initial);
+  appendReplayRecord<ReplayBaseRecord>(pi, ctx, "swe-replay-base", {
+    schemaVersion: 1, rootEntryId, requestedCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS,
+    cwd: ctx.cwd, baseTreeOid: baseTree.treeOid, snapshot: initial, tree: baseTree,
+  });
 
   const restore = async (snapshot: WorkspaceSnapshot) => {
     // Retain a recovery snapshot before replacing any current files.
@@ -63,10 +78,18 @@ export async function runSweReplay(
     const terminal = ctx.sessionManager.getLeafEntry();
     if (!terminal) throw new Error("No terminal entry to evaluate.");
     const candidate = snapshot ?? await workspace.capture(rootEntryId, terminal.id);
+    if (ctx.sessionManager.getLeafEntry()?.id !== terminal.id) throw new Error("Session changed while capturing a completed candidate.");
+    // Persist the snapshot association BEFORE testing, so interruption cannot
+    // strand it as an otherwise unassociated OID in evaluation evidence.
+    const candidateEntryId = iteration > 0 ? appendReplayRecord<ReplayCandidateRecord>(pi, ctx, "swe-replay-candidate", {
+      schemaVersion: 1, rootEntryId, iteration, terminalEntryId: terminal.id, snapshot: candidate,
+    }) : undefined;
     const label = iteration === 0 ? "baseline" : `iteration ${iteration}`;
     ctx.ui.notify(`Running regression validation: ${label}…`, "info");
     const result = await evaluateSnapshot(pi, workspace, candidate, ctx.cwd, testCommand, iteration, terminal.id);
-    pi.appendEntry("swe-replay-evaluation", result);
+    appendReplayRecord<ReplayEvaluationRecord>(pi, ctx, "swe-replay-evaluation", {
+      ...result, schemaVersion: 1, candidateEntryId, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS, cwd: ctx.cwd,
+    });
     ctx.ui.notify(`Regression validation ${label}: ${result.status}`, result.status === "passed" ? "info" : "warning");
     if (result.status === "inconclusive" || (iteration === 0 && result.status !== "passed")) {
       throw new Error(`Regression ${iteration === 0 ? "baseline" : `evaluation for iteration ${iteration}`} ${result.status}. Inspect swe-replay-evaluation for details.`);
@@ -131,6 +154,9 @@ export async function runSweReplay(
     if (navigation.cancelled) {
       throw new Error(`Explore iteration ${i} was cancelled.`);
     }
+    if (ctx.sessionManager.getLeafEntry()?.id !== rootEntryId) {
+      throw new Error(`Navigation did not reach the replay root for iteration ${i}.`);
+    }
 
     await restore(initial);
     // Reattach the root state on this branch so its first step has a snapshot ancestor.
@@ -139,9 +165,8 @@ export async function runSweReplay(
     await startReplayAndWaitForSettlement(pi, ctx, () => pi.sendUserMessage(prompt), rootEntryId, i, workspace);
     await evaluate(i);
   }
-  // TODO: Export one patch per iteration.
-  // TODO: Record candidates and return the best result.
-  return { requestedPatchCount: n, prompt };
+  const final = await finalizeReplay(pi, ctx, workspace, rootEntryId);
+  return { requestedPatchCount: n, prompt, ...final };
 }
 
 /**
@@ -178,8 +203,10 @@ async function startReplayAndWaitForSettlement(
     }
   });
   let unsubscribe = () => {};
+  let aborted = false;
   const settled = new Promise<void>((resolve) => {
-    unsubscribe = pi.on("agent_settled", () => {
+    unsubscribe = pi.on("agent_settled", (event) => {
+      aborted = event.aborted;
       resolve();
     });
   });
@@ -187,7 +214,15 @@ async function startReplayAndWaitForSettlement(
   try {
     startRun();
     await settled;
+    // Settlement, not the brief pre-start idle state, is the completion boundary.
+    await ctx.waitForIdle();
     if (snapshotError) throw snapshotError;
+    if (aborted) throw new Error(`Replay iteration ${iteration} was aborted; no final selection was made.`);
+    const lastAssistant = ctx.sessionManager.getBranch().filter((entry) => entry.type === "message" && entry.message.role === "assistant").at(-1);
+    if (lastAssistant?.type === "message" && lastAssistant.message.role === "assistant"
+      && ["error", "aborted", "pending", "deferred"].includes(lastAssistant.message.stopReason)) {
+      throw new Error(`Replay iteration ${iteration} did not complete successfully (${lastAssistant.message.stopReason}).`);
+    }
   } finally {
     unsubscribe();
     stopSnapshots();

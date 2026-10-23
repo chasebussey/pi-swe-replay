@@ -1,3 +1,5 @@
 node_modules/
 /docs/
 .pi/
+.DS_Store
+/experiments/

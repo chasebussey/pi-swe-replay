@@ -1,0 +1,101 @@
+[
+  {
+    "id": "raw-empty-short-circuit",
+    "rawPatch": "",
+    "files": [{ "path": "a.py", "before": "not valid !!!", "after": "also invalid !!!" }]
+  },
+  {
+    "id": "formatting-and-comments",
+    "files": [{ "path": "a.py", "before": "def f(a, b):\n    return a + b\n", "after": "# comment\ndef f( a,b ):\n return (a+b) # trailing\n" }]
+  },
+  {
+    "id": "quote-style",
+    "files": [{ "path": "a.py", "before": "x = 'hello'\n", "after": "x = \"hello\"\n" }]
+  },
+  {
+    "id": "docstring-change",
+    "files": [{ "path": "a.py", "before": "def f():\n    \"\"\"old documentation\"\"\"\n    return 1\n", "after": "def f():\n    \"\"\"new documentation\"\"\"\n    return 1\n" }]
+  },
+  {
+    "id": "docstring-only-paired-fallback",
+    "files": [{ "path": "a.py", "before": "def f():\n    \"\"\"old\"\"\"\n", "after": "def f():\n    \"\"\"new\"\"\"\n    return 1\n" }]
+  },
+  {
+    "id": "constant-change",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\n", "after": "def f():\n    return 2\n" }]
+  },
+  {
+    "id": "constant-change-formatted",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\n", "after": "# fix\ndef f( ):\n return (2) # done\n" }]
+  },
+  {
+    "id": "constant-change-different-path",
+    "files": [{ "path": "b.py", "before": "def f():\n    return 1\n", "after": "def f():\n    return 2\n" }]
+  },
+  {
+    "id": "added-function-before",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\n", "after": "def g():\n    return 2\n\ndef f():\n    return 1\n" }]
+  },
+  {
+    "id": "added-function-after",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\n", "after": "def f():\n    return 1\n\ndef g():\n    return 2\n" }]
+  },
+  {
+    "id": "added-function-before-interior",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\nsentinel = 0\n", "after": "def g():\n    return 2\ndef f():\n    return 1\nsentinel = 0\n" }]
+  },
+  {
+    "id": "added-function-after-interior",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\nsentinel = 0\n", "after": "def f():\n    return 1\ndef g():\n    return 2\nsentinel = 0\n" }]
+  },
+  {
+    "id": "added-function-and-global-change",
+    "files": [{ "path": "a.py", "before": "x = 1\ndef f():\n    return 1\n", "after": "x = 2\ndef f():\n    return 1\ndef g():\n    return 2\n" }]
+  },
+  {
+    "id": "added-and-modified-function",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\n", "after": "def f():\n    return 3\ndef g():\n    return 2\n" }]
+  },
+  {
+    "id": "removed-function",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\ndef g():\n    return 2\n", "after": "def f():\n    return 1\n" }]
+  },
+  {
+    "id": "added-async-method",
+    "files": [{ "path": "a.py", "before": "class C:\n    def f(self):\n        return 1\n", "after": "class C:\n    def f(self):\n        return 1\n    @staticmethod\n    async def g():\n        return 2\n" }]
+  },
+  {
+    "id": "nested-function-modifies-outer",
+    "files": [{ "path": "a.py", "before": "def f():\n    return 1\n", "after": "def f():\n    def g():\n        return 2\n    return 1\n" }]
+  },
+  {
+    "id": "invalid-python",
+    "files": [{ "path": "a.py", "before": "x = 1\n", "after": "def broken(:\n" }]
+  },
+  {
+    "id": "multiple-files",
+    "files": [
+      { "path": "a.py", "before": "x = 1\n", "after": "x = 2\n" },
+      { "path": "b.py", "before": "y = 1\n", "after": "y = 2\n" }
+    ]
+  },
+  {
+    "id": "multiple-files-reversed",
+    "files": [
+      { "path": "b.py", "before": "y = 1\n", "after": "y = 2\n" },
+      { "path": "a.py", "before": "x = 1\n", "after": "x = 2\n" }
+    ]
+  },
+  {
+    "id": "new-empty-python-file",
+    "files": [{ "path": "empty.py", "before": "", "after": "" }]
+  },
+  {
+    "id": "new-comment-only-python-file",
+    "files": [{ "path": "new.py", "before": "", "after": "# comment\n" }]
+  },
+  {
+    "id": "python-314-template-string",
+    "files": [{ "path": "a.py", "before": "x = 1\n", "after": "x = t'{value}'\n" }]
+  }
+]

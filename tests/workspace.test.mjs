@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, unlinkSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, readlinkSync, existsSync, symlinkSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJiti } from "jiti";
@@ -86,6 +86,116 @@ test("ignored-file collisions are refused before cleanup", async (t) => {
   await assert.rejects(workspace.restore(snapshot), /Ignored files/);
   assert.equal(read("new"), "ignored user data");
   assert.equal(read("a"), "preserve");
+});
+
+test("content trees ignore staging and retain complete content without mutating the checkout", async (t) => {
+  const { git, write, workspace } = await repo(t);
+  write("a", "user's initial change");
+  write("initial-untracked", "user data");
+  const initial = await workspace.capture("root", "root");
+  const base = await workspace.contentTree(initial);
+
+  write("a", "candidate");
+  write("new\nfile", "addition");
+  git("stash", "push", "-u", "-m", "ordinary user stash");
+  git("stash", "apply", "--index");
+  const stashes = git("stash", "list");
+  const firstSnapshot = await workspace.capture("root", "one");
+  const first = await workspace.contentTree(firstSnapshot);
+  git("add", "a", "new\nfile", "initial-untracked");
+  const before = git("status", "--porcelain=v1", "-z");
+  const second = await workspace.contentTree(await workspace.capture("root", "two"));
+
+  assert.equal(first.treeOid, second.treeOid);
+  assert.equal(git("status", "--porcelain=v1", "-z"), before);
+  assert.equal(git("stash", "list"), stashes);
+  assert.equal(git("show", `${base.treeOid}:initial-untracked`), "user data");
+  assert.equal(git("show", `${second.treeOid}:new\nfile`), "addition");
+  assert.equal(git("rev-parse", second.ref).trim(), second.treeOid);
+  assert.deepEqual(await workspace.exportPatch(base, first), await workspace.exportPatch(base, second));
+  assert.equal((await workspace.exportPatch(first, second)).length, 0);
+  await assert.rejects(workspace.exportPatch(base, { ...second, rootEntryId: "other" }), /different replay runs/);
+
+  // The tree has its own retaining ref, independent of the original stash-shaped commit.
+  git("update-ref", "-d", firstSnapshot.ref);
+  git("reflog", "expire", "--expire=now", "--all");
+  git("gc", "--prune=now");
+  assert.equal(git("show", `${first.ref}:new\nfile`), "addition");
+});
+
+test("content trees include recreated staged deletions and file-to-directory replacements", async (t) => {
+  const { cwd, git, write, workspace } = await repo(t);
+  git("rm", "a", "deleted");
+  mkdirSync(join(cwd, "a"));
+  write("a/child", "replacement directory");
+  write("deleted", "recreated untracked");
+  write("staged-then-removed", "added");
+  git("add", "staged-then-removed");
+  unlinkSync(join(cwd, "staged-then-removed"));
+  write("ignored", "must not enter content tree");
+  const before = git("status", "--porcelain=v1", "-z");
+  const snapshot = await workspace.capture("root", "step");
+  const tree = await workspace.contentTree(snapshot);
+
+  assert.equal(git("show", `${tree.treeOid}:a/child`), "replacement directory");
+  assert.equal(git("show", `${tree.treeOid}:deleted`), "recreated untracked");
+  assert.throws(() => git("show", `${tree.treeOid}:staged-then-removed`));
+  assert.throws(() => git("show", `${tree.treeOid}:ignored`));
+  assert.equal(git("status", "--porcelain=v1", "-z"), before);
+
+  await workspace.withEvaluationWorkspace(snapshot, cwd, async (directory) => {
+    execFileSync("git", ["add", "-A"], { cwd: directory });
+    const materialized = execFileSync("git", ["write-tree"], { cwd: directory, encoding: "utf8" }).trim();
+    assert.equal(materialized, tree.treeOid);
+  });
+});
+
+test("exported patches apply to dirty initial content, including binary, mode, symlink and existence changes", async (t) => {
+  const { cwd, git, write, workspace } = await repo(t);
+  write("a", "preexisting staged change\n");
+  git("add", "a");
+  write("a", "preexisting unstaged change\n");
+  write("preexisting", "initial untracked\n");
+  write("invalid-utf8", Buffer.from([0xff, 0xfe, 0x0a]));
+  const initial = await workspace.capture("root", "root");
+  const base = await workspace.contentTree(initial);
+
+  write("a", "candidate content\n");
+  write("preexisting", "updated untracked\n");
+  write("invalid-utf8", Buffer.from([0xff, 0xfd, 0x0a]));
+  unlinkSync(join(cwd, "deleted"));
+  write("binary", Buffer.from([0, 1, 2, 255]));
+  write("executable", "#!/bin/sh\nexit 0\n");
+  chmodSync(join(cwd, "executable"), 0o755);
+  symlinkSync("a", join(cwd, "link"));
+  write("staged-addition", "staged\n");
+  git("add", "staged-addition");
+  const candidate = await workspace.contentTree(await workspace.capture("root", "candidate"));
+  const before = git("status", "--porcelain=v1", "-z");
+
+  // Ignore caller diff presentation settings and never invoke external diff programs.
+  git("config", "diff.external", "nonexistent-command");
+  git("config", "diff.noprefix", "true");
+  git("config", "diff.context", "0");
+  git("config", "diff.renames", "true");
+  const patch = await workspace.exportPatch(base, candidate);
+  assert.ok(Buffer.isBuffer(patch));
+  assert.match(patch.toString(), /GIT binary patch/);
+  assert.match(patch.toString(), /diff --git a\/a b\/a/);
+  assert.equal(git("status", "--porcelain=v1", "-z"), before);
+
+  await workspace.withEvaluationWorkspace(initial, cwd, async (directory) => {
+    execFileSync("git", ["apply", "--binary", "-"], { cwd: directory, input: patch });
+    assert.equal(readFileSync(join(directory, "a"), "utf8"), "candidate content\n");
+    assert.equal(readFileSync(join(directory, "preexisting"), "utf8"), "updated untracked\n");
+    assert.deepEqual(readFileSync(join(directory, "binary")), Buffer.from([0, 1, 2, 255]));
+    assert.deepEqual(readFileSync(join(directory, "invalid-utf8")), Buffer.from([0xff, 0xfd, 0x0a]));
+    assert.equal(readlinkSync(join(directory, "link")), "a");
+    assert.equal(existsSync(join(directory, "deleted")), false);
+    execFileSync("git", ["add", "-A"], { cwd: directory });
+    const appliedTree = execFileSync("git", ["write-tree"], { cwd: directory, encoding: "utf8" }).trim();
+    assert.equal(appliedTree, candidate.treeOid);
+  });
 });
 
 test("pre-step lookup uses ancestors, excluding own and sibling snapshots", () => {

@@ -6,11 +6,20 @@
   "keywords": [
     "pi-package"
   ],
+  "files": [
+    "extensions/",
+    "licenses/",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^1.3.0",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "pyodide": "314.0.7"
   }
 }

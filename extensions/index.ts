@@ -5,7 +5,7 @@ import { showReplayView } from "./swe-replay/ui/show-view";
 /** SWE-Replay commands and read-only inspection. */
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("swe-replay", {
-    description: "Generate n candidate patches for a task (usage: /swe-replay <n> <prompt>)",
+    description: "Generate, validate, select and restore a replay patch (usage: /swe-replay <n> <prompt>)",
     handler: async (args, ctx) => {
       const request = parseSweReplayRequest(args);
 
@@ -24,8 +24,17 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const run = await runSweReplay(pi, ctx, request.n, request.prompt, testCommand.trim());
+      if (run.selection.status === "no-valid-candidates") {
+        ctx.ui.notify(
+          `SWE-Replay completed ${run.requestedPatchCount} iteration(s): no regression-passing, nonempty patch qualified. Workspace and conversation remain at the last iteration.`,
+          "warning",
+        );
+        return;
+      }
+      const winner = run.selection.groups[0];
+      const tie = run.selection.tiedGroupKeyHashes.length > 1 ? " Tie resolved by earliest passing iteration." : "";
       ctx.ui.notify(
-        `SWE-Replay completed ${run.requestedPatchCount} iteration(s): ${run.prompt}`,
+        `Selected iteration ${winner.representativeIteration}: ${winner.votes} of ${run.selection.eligibleCount} eligible votes across ${run.requestedPatchCount} completed iterations.${tie} Workspace and conversation restored to the selected representative; regression passing is not proof of task correctness.`,
         "info",
       );
     },

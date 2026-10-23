@@ -16,6 +16,28 @@ export interface WorkspaceSnapshot {
   ref: string;
 }
 
+/** A complete content tree; its ref retains tracked and nonignored untracked blobs. */
+export interface WorkspaceContentTree {
+  rootEntryId: string;
+  snapshotOid: string;
+  treeOid: string;
+  ref: string;
+}
+
+export interface WorkspaceTreeFile {
+  mode: string;
+  oid: string;
+  /** Null for non-blob entries (for example gitlinks); their OID is exact identity. */
+  content: Buffer | null;
+}
+
+export interface WorkspaceTreeChange {
+  /** Raw Git path bytes, not a potentially lossy UTF-8 decoding. */
+  path: Buffer;
+  before: WorkspaceTreeFile | null;
+  after: WorkspaceTreeFile | null;
+}
+
 /**
  * Git stash-shaped commits, built with temporary indexes: capture never cleans the workspace.
  * Known limitation: restoration cannot undo mutations outside the captured Git state,
@@ -83,6 +105,103 @@ export class ReplayWorkspace {
     }
   }
 
+  /** Merge the stash's tracked tree and optional untracked tree without staging real files. */
+  async contentTree(snapshot: WorkspaceSnapshot): Promise<WorkspaceContentTree> {
+    const dir = await mkdtemp(join(tmpdir(), "swe-replay-tree-"));
+    const env = { GIT_INDEX_FILE: join(dir, "index") };
+
+    try {
+      const parents = (await this.git(["rev-list", "--parents", "-n", "1", snapshot.oid])).trim().split(/\s+/);
+      if (parents.length !== 3 && parents.length !== 4) {
+        throw new Error("Expected a SWE-Replay stash-shaped workspace snapshot.");
+      }
+
+      await this.git(["read-tree", `${snapshot.oid}^{tree}`], env);
+      if (parents.length === 4) {
+        // --prefix merges disjoint paths into the temporary index, refusing overlaps.
+        await this.git(["read-tree", "--prefix=", `${snapshot.oid}^3`], env);
+      }
+
+      const treeOid = (await this.git(["write-tree"], env)).trim();
+      const ref = `refs/swe-replay/trees/${randomUUID()}`;
+      await this.git(["update-ref", ref, treeOid]);
+
+      return { rootEntryId: snapshot.rootEntryId, snapshotOid: snapshot.oid, treeOid, ref };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** Read immutable changes in Git byte-path order, without consulting working-tree files. */
+  async treeChanges(
+    base: WorkspaceContentTree, candidate: WorkspaceContentTree, signal?: AbortSignal,
+  ): Promise<WorkspaceTreeChange[]> {
+    if (base.rootEntryId !== candidate.rootEntryId) {
+      throw new Error("Cannot compare content trees from different replay runs.");
+    }
+
+    const gitBytes = async (args: string[]) => {
+      signal?.throwIfAborted();
+      const result = await exec("git", args, {
+        cwd: this.cwd, encoding: "buffer", signal, maxBuffer: 32 * 1024 * 1024,
+      });
+      return result.stdout;
+    };
+    const list = async (treeOid: string) => {
+      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(treeOid)) throw new Error("Invalid content tree OID.");
+      const output = await gitBytes(["ls-tree", "-r", "-z", "--full-tree", treeOid]);
+      const entries = new Map<string, { path: Buffer; mode: string; type: string; oid: string }>();
+      let start = 0;
+      while (start < output.length) {
+        const end = output.indexOf(0, start);
+        const tab = output.indexOf(9, start);
+        if (end < 0 || tab < start || tab > end) throw new Error("Malformed Git tree listing.");
+        const [mode, type, oid] = output.subarray(start, tab).toString("ascii").split(" ");
+        const path = output.subarray(tab + 1, end);
+        entries.set(path.toString("base64"), { path, mode, type, oid });
+        start = end + 1;
+      }
+      return entries;
+    };
+
+    const before = await list(base.treeOid);
+    const after = await list(candidate.treeOid);
+    const paths = [...new Set([...before.keys(), ...after.keys()])];
+    paths.sort((a, b) => Buffer.compare(Buffer.from(a, "base64"), Buffer.from(b, "base64")));
+    const read = async (entry: ReturnType<typeof before.get>): Promise<WorkspaceTreeFile | null> => {
+      if (!entry) return null;
+      const content = entry.type === "blob" ? await gitBytes(["cat-file", "blob", entry.oid]) : null;
+      return { mode: entry.mode, oid: entry.oid, content };
+    };
+
+    const changes: WorkspaceTreeChange[] = [];
+    for (const path of paths) {
+      const left = before.get(path);
+      const right = after.get(path);
+      if (left?.mode === right?.mode && left?.oid === right?.oid) continue;
+      changes.push({ path: Buffer.from(path, "base64"), before: await read(left), after: await read(right) });
+    }
+    return changes;
+  }
+
+  /** Exact content patch relative to the initial workspace, not HEAD; never a normalized key. */
+  async exportPatch(base: WorkspaceContentTree, candidate: WorkspaceContentTree): Promise<Buffer> {
+    if (base.rootEntryId !== candidate.rootEntryId) {
+      throw new Error("Cannot export a patch between different replay runs.");
+    }
+
+    const result = await exec("git", [
+      "-c", "core.quotePath=true", "diff",
+      "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color",
+      "--no-renames", "--no-relative", "--diff-algorithm=myers", "--no-indent-heuristic",
+      "--unified=3", "--inter-hunk-context=0", "--src-prefix=a/", "--dst-prefix=b/",
+      "--line-prefix=", "--output-indicator-new=+", "--output-indicator-old=-",
+      "--output-indicator-context= ", base.treeOid, candidate.treeOid, "--",
+    ], { cwd: this.cwd, encoding: "buffer", maxBuffer: 32 * 1024 * 1024 });
+
+    return result.stdout;
+  }
+
   /** Materialize a snapshot without replacing files in the active checkout. */
   async withEvaluationWorkspace<T>(snapshot: WorkspaceSnapshot, cwd: string, evaluate: (directory: string) => Promise<T>): Promise<T> {
     // Git may canonicalize aliases such as macOS /var -> /private/var.
@@ -108,12 +227,17 @@ export class ReplayWorkspace {
     }
   }
 
-  /** Caller must retain a current-state backup before this destructive operation. */
-  async restore(snapshot: WorkspaceSnapshot): Promise<void> {
+  async assertHeadUnchanged(snapshot: WorkspaceSnapshot): Promise<void> {
     const base = (await this.git(["rev-parse", `${snapshot.oid}^1`])).trim();
     if (base !== (await this.git(["rev-parse", "HEAD"])).trim()) {
       throw new Error("Cannot restore a SWE-Replay snapshot after HEAD has changed.");
     }
+  }
+
+  /** Caller must retain a current-state backup before this destructive operation. */
+  async restore(snapshot: WorkspaceSnapshot, beforeMutation?: () => void): Promise<void> {
+    await this.assertHeadUnchanged(snapshot);
+    const base = (await this.git(["rev-parse", `${snapshot.oid}^1`])).trim();
     // Avoid overwriting ignored files, including directory/file collisions.
     const target = (await this.git(["ls-tree", "-r", "--name-only", "-z", snapshot.oid])).split("\0").filter(Boolean);
     // reset --hard visits HEAD's paths even if the final snapshot deletes them.
@@ -126,6 +250,8 @@ export class ReplayWorkspace {
     if (ignored.some((file) => target.some((path) => file === path || file.startsWith(`${path}/`) || path.startsWith(`${file}/`)))) {
       throw new Error("Ignored files would obstruct SWE-Replay workspace restoration.");
     }
+    // Let transactional callers distinguish a preflight refusal from a partial apply.
+    beforeMutation?.();
     await this.git(["reset", "--hard", "HEAD"]);
     await this.git(["clean", "-fd"]);
     await this.git(["stash", "apply", "--index", snapshot.oid]);
