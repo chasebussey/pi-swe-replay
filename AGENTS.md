@@ -3,14 +3,17 @@
 ## Project overview
 
 `pi-swe-replay` is a TypeScript extension package for the Pi coding agent. It
-implements the exploration/exploitation foundations of
-[SWE-Replay v2](https://arxiv.org/html/2601.22129v2), with workspace restoration
-and user-command regression validation. Patch export and best-result ranking
-are not implemented.
+implements exploration, exploitation, and regression-filtered final patch voting
+from [SWE-Replay v2](https://arxiv.org/html/2601.22129v2), with automatic restoration
+of the selected workspace and conversation. The core workflow is ready for
+controlled end-to-end verification, not yet established as production-ready or a
+reproduction of the paper's benchmark results. User-facing patch export and
+detailed final-result dashboard presentation remain unimplemented.
 
 Registered commands:
-- `/swe-replay <n> <prompt>` starts a positive number of replay iterations and
-  asks for a required regression command through UI input.
+- `/swe-replay <n> <prompt>` asks for a required regression command through UI
+  input, runs a positive number of iterations, then selects and restores a passing
+  representative if one qualifies. `n` counts iterations, not distinct patches.
 - `/swe-replay-view` opens a read-only dashboard across active and archived
   branches; outside TUI mode it provides a summary.
 - `/inspect-session` displays SWE-Replay entries on the active session branch.
@@ -80,6 +83,54 @@ unsupported eligibility labels rather than reinterpreting their probabilities.
 Do not describe the current format as supporting historical policy-v1/v2
 compatibility; historical schemas are not automatically migrated.
 
+### Final patch selection and restoration
+
+Final voting is separate from exploitation sampling. Keep their eligibility,
+weighting, and persisted policies distinct.
+
+- Finalize only after all requested iterations complete. Aborted, errored,
+  interrupted, or inconclusive runs must not make an automatic final selection.
+  Use the shared `assertReplayComplete` before normalization and when constructing
+  selection inputs; it does not require patch identities or all candidates to pass.
+- Measure patches against the initial complete workspace content tree, not HEAD.
+  Preexisting staged, unstaged, and nonignored untracked work is part of the base.
+- Under `passing-candidate-occurrences-v1`, each passing, nonempty completed
+  iteration contributes one vote, including repeated equivalent outcomes. The
+  baseline, failed, unevaluated, inconclusive, raw-empty, and normalization-empty
+  candidates cannot vote. Exploitation multiplicities and reasoning scores do not
+  affect this vote. Reuse captured evaluations; do not automatically retest.
+- Select the largest equivalent-patch group by plurality, not absolute majority.
+  Ties and representatives favor the earliest passing iteration. Capture groups,
+  votes, exclusions, ties, and the representative without rerunning selection
+  during inspection. Regression passing is not proof of task correctness.
+- Persist selection before restoration. Retain a recovery snapshot, navigate to
+  the selected completed candidate anchor without a summary, verify navigation,
+  then restore the candidate's original snapshot, including index state. Never
+  apply normalized source or grouping keys to the checkout.
+- With no eligible winner, persist an explicit no-winner result and leave the
+  last iteration's workspace and conversation active. A restoration failure is
+  separate from selection: never report it as successful completion. Recovery of
+  workspace and context after mutation is best-effort and failures remain explicit.
+
+### Patch normalization policy
+
+- `normalization-policy.ts` owns policy/provenance constants, shared types, and
+  `isSupportedNormalizationProvenance`. Use that predicate in consumers; keep
+  payload shape and cross-record association checks in their respective layers.
+- `complete-tree-agentless-mixed-v1` combines Agentless-derived Python grouping
+  with lossless exact-content handling for other files, binary/invalid-UTF-8
+  content, symlinks, and unsupported kinds. Preserve raw path bytes, existence,
+  and modes. Raw-empty and normalization-empty are distinct.
+- `agentless-python-pyodide-v2` uses pinned bundled CPython/WASM in an offline,
+  disposable worker, not host Python. Parse candidate source; never execute it.
+  Syntax errors use exact original content on both sides with diagnostics.
+  Runtime, resource, and infrastructure failures reject the entire batch; do not
+  turn them into partial votes or silently change normalization policy.
+- Preserve captured provenance and reject unsupported policies rather than
+  reinterpreting old hashes. The Agentless reference corpus is not proof of
+  semantic equivalence or comprehensive Python compatibility. Keep third-party
+  notices and licenses with the implementation.
+
 ## Repository map
 
 - `extensions/index.ts`: command registration, UI input, and notifications.
@@ -93,15 +144,37 @@ compatibility; historical schemas are not automatically migrated.
 - `extensions/swe-replay/selection-trace.ts`: durable trace shape and validation.
 - `extensions/swe-replay/track-turn-files.ts`: branch-aware successful file access
   tracking persisted as custom session entries.
-- `extensions/swe-replay/workspace.ts`: Git snapshot capture, restoration, and
-  disposable evaluation worktrees.
+- `extensions/swe-replay/workspace.ts`: Git snapshot capture, restoration,
+  disposable evaluation worktrees, complete content trees, and binary-safe
+  initial-workspace-relative patch export helpers (not exposed as a command).
+- `extensions/swe-replay/replay-records.ts`: typed payload parsing, cross-branch
+  archive associations, completion checks, and final-selection input construction.
+- `extensions/swe-replay/final-selection.ts`: pure iteration assessment, exclusion
+  diagnostics, vote aggregation, and deterministic final ranking.
+- `extensions/swe-replay/finalize-run.ts`: archive completion, one normalization
+  batch, decision persistence, and winner-restoration orchestration.
+- `extensions/swe-replay/restore-winner.ts`: selected conversation/workspace
+  restoration, recovery snapshots, and best-effort recovery outcomes.
+- `extensions/swe-replay/normalization-policy.ts`: shared compatibility contract
+  for normalization producers, parsers, and voting.
+- `extensions/swe-replay/patch-normalization.ts`: complete-tree mixed-file grouping.
+- `extensions/swe-replay/python-normalization.ts`, `python-normalization-worker.mjs`,
+  and `agentless-normalization.py`: offline Pyodide lifecycle, Python source
+  transformations, and disposable normalized Git diffs. The worker and Python
+  source are required runtime assets.
 - `extensions/swe-replay/visualization-model.ts` and `ui/`: read-only projection
-  and dashboard. Generation completion and regression outcomes are not displayed.
+  and dashboard. Detailed final votes, winner markers, generation completion, and
+  regression outcomes are not displayed.
 - `tests/`: Node.js tests and session fixtures, loaded through `jiti`.
 - `tsconfig.json`: strict TypeScript, ES2022, NodeNext resolution, no output.
 - `README.md`: commands, selection semantics, workspace safety, and checks.
-- `docs/`: design notes; verify them against current implementation when making
-  changes rather than assuming every proposal is implemented.
+- `tests/reference/agentless/` and normalization fixtures: pinned reference
+  provenance and development oracle; regenerating fixtures is a separate check.
+- `THIRD_PARTY_NOTICES.md` and `licenses/`: Agentless/Pyodide/CPython notices.
+- `docs/`: local design/status notes, ignored by Git. Verify them against current
+  implementation rather than assuming every proposal is implemented. The local
+  `docs/swe-replay-implementation-status.md` records end-to-end verification work.
+- `experiments/`: local research probes, ignored by Git and not runtime code.
 
 ## Setup and checks
 
@@ -123,8 +196,23 @@ pi --extension ./extensions/index.ts
 ```
 
 Use a disposable repository/session: replay sends real prompts, navigates history,
-and replaces workspace files. Check arguments, command input/cancellation,
-settlement cleanup, branch isolation, regression filtering, and restoration.
+and replaces workspace files. Load the extension from its actual path when
+running Pi in a separate fixture repository. Automated tests do not establish
+provider compatibility; live end-to-end verification remains the next milestone.
+
+Check arguments, command input/cancellation, baseline failure, settlement cleanup,
+and branch isolation. Explicitly observe successful exploitation, not only
+exploration or fallback: verify pre-step files/context, retained preceding tool
+results, and provider acceptance of the empty continuation message. Exercise
+regression filtering, no-winner outcomes, aborted/inconclusive runs, and an earlier
+archived winner's workspace/index and conversation restoration. Verify a subsequent
+agent turn uses the selected trajectory. Check changed-HEAD and ignored-file
+refusals, navigation cancellation, and recovery evidence without risking real work.
+
+The regression command must already pass on the baseline. Keep an initially
+failing bug-reproduction test separate and use it afterward to assess task success.
+Ignored dependencies are not copied into worktrees; include needed setup. Node
+tests use bundled Pyodide without host Python or runtime network access.
 
 ## Implementation conventions
 
@@ -142,6 +230,9 @@ settlement cleanup, branch isolation, regression filtering, and restoration.
 - Tests for persisted probabilities should assert captured data, not recompute
   historical values from later session contents. Malformed-input tests should
   identify specific diagnostics rather than rely on broad warning counts.
+- Keep unknown-data payload parsing separate from run ownership, ancestry, and
+  cross-record validation. Keep iteration assessment separate from vote aggregation.
+  Do not duplicate completion or normalization-compatibility policies in callers.
 - Update README when changing commands, selection semantics, or setup.
 - Keep changes focused; do not edit `node_modules` or commit generated artifacts.
 
@@ -149,7 +240,19 @@ settlement cleanup, branch isolation, regression filtering, and restoration.
 
 Persisted custom entry types:
 - `swe-replay-root`: prompt, iteration count, test command, timeout, and cwd.
-- `swe-replay-evaluation`: baseline/candidate outcome and bounded evidence.
+- `swe-replay-base`: frozen execution contract, initial snapshot, and content tree.
+- `swe-replay-candidate`: completed iteration snapshot and post-trajectory context
+  anchor, persisted before regression evaluation.
+- `swe-replay-evaluation`: baseline/candidate outcome, explicit candidate association
+  (except baseline), frozen execution contract, and bounded evidence.
+- `swe-replay-patch-identity`: retained candidate content tree, normalized grouping
+  hash, policy provenance, and fallback diagnostics.
+- `swe-replay-final-selection`: groups, votes, exclusions, ties, and selected
+  representative or explicit no-winner result.
+- `swe-replay-restoration`: started/restored/failed attempts, selection/candidate
+  associations, backup identity, and recovery outcomes.
+- `swe-replay-finalization-error`: archive, normalization, or selection failure
+  without declaring a completed selection.
 - `swe-replay-exploit-log`: selection, candidate membership, and trace.
 - `swe-replay-turn-files`: `rootEntryId`, `iteration`, `turnIndex`,
   `messageEntryId`, and cumulative `files`.
@@ -160,7 +263,15 @@ Persisted custom entry types:
 Consider existing persisted sessions when changing shapes. Malformed decisions
 remain visible as `unknown` with diagnostics. Missing, invalid, or unsupported
 traces have unavailable probabilities; historical schemas are not automatically
-migrated. File-access snapshots are not file-content backups.
+migrated. Final selection requires explicit v1 archive associations; do not infer
+missing candidates from leaves or retrospectively select legacy runs. File-access
+snapshots are not file-content backups.
+
+`/inspect-session` only shows the active branch. After restoring an archived
+winner, the final-selection entry can remain on the last iteration's archived
+branch; the active restoration record references it by `selectionEntryId`. Inspect
+the full session JSONL for cross-branch evidence; the dashboard does not yet show
+final outcomes.
 
 Workspace capture uses temporary indexes and retains stash-compatible snapshots
 under `refs/swe-replay/*`, separate from the normal stash list. Restoration uses
