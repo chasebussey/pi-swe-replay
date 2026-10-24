@@ -18,6 +18,16 @@ export interface RegressionEvaluation {
   durationMs: number;
 }
 
+/** Check captured status against execution evidence, without executing anything. */
+export function isConsistentRegressionOutcome(
+  evaluation: Pick<RegressionEvaluation, "status" | "exitCode" | "killed" | "error">,
+): boolean {
+  if (evaluation.status === "passed") return evaluation.exitCode === 0 && !evaluation.killed && evaluation.error === undefined;
+  if (evaluation.status === "failed") return Number.isInteger(evaluation.exitCode) && evaluation.exitCode !== 0
+    && !evaluation.killed && evaluation.error === undefined;
+  return evaluation.status === "inconclusive";
+}
+
 /** Direct extension execution: no model tool calls or exploration tracking. */
 export async function evaluateSnapshot(
   pi: Pick<ExtensionAPI, "exec">,

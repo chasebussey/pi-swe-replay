@@ -152,7 +152,11 @@ function parseIdentityRecord(data: ReplayRecordEnvelope): ReplayIdentityRecord |
   return { ...data, candidateEntryId: data.candidateEntryId, tree: data.tree, normalization: data.normalization };
 }
 
-function parseEvaluationRecord(data: ReplayRecordEnvelope): ReplayEvaluationRecord | undefined {
+/** Payload parser shared by archive selection and read-only evidence display. */
+export function parseReplayEvaluation(value: unknown): ReplayEvaluationRecord | undefined {
+  const data = record(value);
+  if (!data || data.schemaVersion !== 1 || !text(data.rootEntryId)) return;
+
   if (typeof data.iteration !== "number" || !Number.isSafeInteger(data.iteration) || data.iteration < 0
     || !text(data.terminalEntryId) || !oid(data.snapshotOid)
     || (data.status !== "passed" && data.status !== "failed" && data.status !== "inconclusive")
@@ -172,7 +176,9 @@ function parseEvaluationRecord(data: ReplayRecordEnvelope): ReplayEvaluationReco
   }
 
   return {
-    ...data, iteration: data.iteration, terminalEntryId: data.terminalEntryId, snapshotOid: data.snapshotOid,
+    ...data, schemaVersion: 1, rootEntryId: data.rootEntryId,
+    candidateEntryId: typeof candidateEntryId === "string" ? candidateEntryId : undefined,
+    iteration: data.iteration, terminalEntryId: data.terminalEntryId, snapshotOid: data.snapshotOid,
     status: data.status, stdout: data.stdout, stderr: data.stderr, durationMs: data.durationMs,
     testCommand: data.testCommand, testTimeoutMs: data.testTimeoutMs, cwd: data.cwd,
   };
@@ -268,7 +274,7 @@ export function readReplayArchive(entries: readonly SessionEntry[], rootEntryId:
 
       identities.push({ ...identity, entryId: entry.id });
     } else {
-      const evaluation = parseEvaluationRecord(data);
+      const evaluation = parseReplayEvaluation(data);
       if (!evaluation) {
         issue("invalid-evaluation", entry.id);
         continue;

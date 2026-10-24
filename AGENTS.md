@@ -7,8 +7,9 @@ implements exploration, exploitation, and regression-filtered final patch voting
 from [SWE-Replay v2](https://arxiv.org/html/2601.22129v2), with automatic restoration
 of the selected workspace and conversation. The core workflow is ready for
 controlled end-to-end verification, not yet established as production-ready or a
-reproduction of the paper's benchmark results. User-facing patch export and
-detailed final-result dashboard presentation remain unimplemented.
+reproduction of the paper's benchmark results. User-facing patch export remains
+unimplemented. The read-only dashboard presents captured iteration, regression,
+final-vote, and restoration outcomes.
 
 Registered commands:
 - `/swe-replay <n> <prompt>` asks for a required regression command through UI
@@ -162,9 +163,10 @@ weighting, and persisted policies distinct.
   and `agentless-normalization.py`: offline Pyodide lifecycle, Python source
   transformations, and disposable normalized Git diffs. The worker and Python
   source are required runtime assets.
-- `extensions/swe-replay/visualization-model.ts` and `ui/`: read-only projection
-  and dashboard. Detailed final votes, winner markers, generation completion, and
-  regression outcomes are not displayed.
+- `extensions/swe-replay/visualization-model.ts`, `overview-model.ts`,
+  `overview-records.ts`, and `ui/`: read-only Overview/Trajectories/Decisions dashboard. Overview projects captured
+  candidate completion, regression results, final votes, and restoration evidence;
+  it never reruns voting or infers live execution from incomplete records.
 - `tests/`: Node.js tests and session fixtures, loaded through `jiti`.
 - `tsconfig.json`: strict TypeScript, ES2022, NodeNext resolution, no output.
 - `README.md`: commands, selection semantics, workspace safety, and checks.
@@ -270,8 +272,8 @@ snapshots are not file-content backups.
 `/inspect-session` only shows the active branch. After restoring an archived
 winner, the final-selection entry can remain on the last iteration's archived
 branch; the active restoration record references it by `selectionEntryId`. Inspect
-the full session JSONL for cross-branch evidence; the dashboard does not yet show
-final outcomes.
+the full session JSONL for raw cross-branch evidence; dashboard Overview reads all
+branches and shows supported captured final outcomes.
 
 Workspace capture uses temporary indexes and retains stash-compatible snapshots
 under `refs/swe-replay/*`, separate from the normal stash list. Restoration uses

@@ -27,7 +27,9 @@ function dashboard() {
 
 test("dashboard supports selection, views, detail paging, opt-in reveal, and close", () => {
   const h = dashboard();
-  assert.match(h.component.render(120).join("\n"), /\[Trajectories\]/);
+  assert.match(h.component.render(120).join("\n"), /\[Overview\]/);
+  h.component.handleInput("\t");
+  h.component.render(120);
   assert.equal(h.reveals(), 0);
   h.component.handleInput("\x1b[B"); // down to a2
   assert.match(h.component.render(120).join("\n"), /Step a2/);
@@ -43,13 +45,13 @@ test("dashboard supports selection, views, detail paging, opt-in reveal, and clo
   const decisions = h.component.render(160).join("\n");
   assert.match(decisions, /step-selected/);
   assert.match(decisions, /this decision does not record generation completion/);
-  assert.match(decisions, /completion not recorded; no evaluation/);
+  assert.match(decisions, /★ final representative/);
   assert.doesNotMatch(decisions, /selected-only|no replacement branch was generated/);
   h.component.handleInput("\x1b[6~"); // PageDown
   assert.ok(h.renders() > 0);
   h.component.handleInput("\t");
-  assert.match(h.component.render(120).join("\n"), /\[Runs\]/);
-  h.component.handleInput("\r");
+  assert.match(h.component.render(120).join("\n"), /\[Overview\]/);
+  h.component.handleInput("\t");
   assert.match(h.component.render(120).join("\n"), /\[Trajectories\]/);
   h.component.handleInput("\r"); // focus details
   h.component.handleInput("\x1b"); // back, not close
@@ -80,7 +82,7 @@ test("layout fits narrow/wide widths, resize, Unicode paths, and theme invalidat
   assert.ok(!safeDisplay("\x1b[31munsafe\x07\x9b").includes("\x1b"));
 });
 
-test("run picker changes runs, scrolling reaches later steps, and resizing preserves selection", () => {
+test("secondary run switching, scrolling, and resizing preserve useful navigation", () => {
   const first = buildReplayView(archive(), "root", ["root"]);
   const second = { ...buildReplayView([root("second")], "second"), steps: Array.from({ length: 30 }, (_, index) => ({
     id: `step-${index}`, iterations: [1], filesBefore: [], reasoningScore: 0, active: false, selectedIn: [],
@@ -88,10 +90,9 @@ test("run picker changes runs, scrolling reaches later steps, and resizing prese
   let height = 16;
   const component = new ReplayDashboard([first, second], theme, () => {}, () => {}, () => height, () => "");
   component.render(80);
-  component.handleInput("\t"); component.render(80);
-  component.handleInput("\t"); component.render(80);
-  component.handleInput("\x1b[B");
-  component.handleInput("\r");
+  component.handleInput("n");
+  component.handleInput("\t");
+  component.render(80);
   assert.match(component.render(80).join("\n"), /second/);
   for (let index = 0; index < 20; index++) component.handleInput("\x1b[B");
   assert.match(component.render(120).join("\n"), /Step step-20/);

@@ -1,4 +1,4 @@
-import type { RegressionEvaluation } from "./evaluation";
+import { isConsistentRegressionOutcome, type RegressionEvaluation } from "./evaluation";
 import type { PatchNormalizationResult } from "./patch-normalization";
 import { isSupportedNormalizationProvenance, PATCH_IDENTITY_POLICY } from "./normalization-policy";
 import type { WorkspaceSnapshot } from "./workspace";
@@ -37,11 +37,14 @@ export interface FinalSelectionEvaluation {
     "rootEntryId" | "iteration" | "terminalEntryId" | "snapshotOid" | "status" | "exitCode" | "killed" | "error">;
 }
 
-export type FinalSelectionExclusion =
-  | "wrong-run" | "invalid-candidate" | "unsupported-normalization" | "base-tree-mismatch"
-  | "conflicting-candidate-records" | "conflicting-evaluation-records"
-  | "evaluation-association-mismatch" | "evaluation-command-mismatch" | "invalid-evaluation"
-  | "unevaluated" | "regression-failed" | "regression-inconclusive" | "raw-empty" | "normalization-empty";
+export const FINAL_SELECTION_EXCLUSIONS = [
+  "wrong-run", "invalid-candidate", "unsupported-normalization", "base-tree-mismatch",
+  "conflicting-candidate-records", "conflicting-evaluation-records",
+  "evaluation-association-mismatch", "evaluation-command-mismatch", "invalid-evaluation",
+  "unevaluated", "regression-failed", "regression-inconclusive", "raw-empty", "normalization-empty",
+] as const;
+
+export type FinalSelectionExclusion = typeof FINAL_SELECTION_EXCLUSIONS[number];
 
 export interface FinalSelectionDiagnostic {
   code: FinalSelectionExclusion | "duplicate-candidate" | "duplicate-evaluation" | "orphan-evaluation";
@@ -181,10 +184,7 @@ function assessIteration(
     if (record.testCommand !== scope.testCommand || record.testTimeoutMs !== scope.testTimeoutMs || record.cwd !== scope.cwd) {
       reasons.push("evaluation-command-mismatch");
     }
-    if (!text(record.entryId) || !["passed", "failed", "inconclusive"].includes(evaluation.status)
-      || (evaluation.status === "passed" && (evaluation.exitCode !== 0 || evaluation.killed || evaluation.error !== undefined))
-      || (evaluation.status === "failed" && (!Number.isInteger(evaluation.exitCode) || evaluation.exitCode === 0
-        || evaluation.killed || evaluation.error !== undefined))) {
+    if (!text(record.entryId) || !isConsistentRegressionOutcome(evaluation)) {
       reasons.push("invalid-evaluation");
     }
     if (evaluation.status === "failed") reasons.push("regression-failed");

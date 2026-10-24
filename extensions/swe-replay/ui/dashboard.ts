@@ -9,7 +9,65 @@ export function safeDisplay(text: string): string {
 }
 const percent = (value?: number) => value === undefined ? "unavailable" : `${(value * 100).toFixed(2)}%`;
 
-interface Row extends SelectItem { details: string; stepId?: string }
+interface Row extends SelectItem { details: string; stepId?: string; iteration?: number }
+
+const regression = (status?: string) => status === "passed" ? "PASS" : status === "failed" ? "FAIL" : status === "inconclusive" ? "INCONCLUSIVE" : "unavailable";
+
+function patchVoteLines(view: ReplayView): string[] {
+  return view.overview.groups.map((group) => `${group.label}  ${"█".repeat(Math.min(group.votes, 20))} ${group.votes} vote${group.votes === 1 ? "" : "s"} · iterations ${group.iterations.join(", ")}${group.selected ? " · ★ selected" : ""} · representative #${group.representativeIteration}`);
+}
+
+function overviewSummary(view: ReplayView): string {
+  const overview = view.overview;
+  const rows = overview.iterations;
+  const count = (status: string) => rows.filter((row) => row.evaluation?.status === status).length;
+  return [
+    `RESULT · ${overview.headline}`,
+    `Prompt: ${view.prompt ?? "unknown"}`,
+    `${view.requestedCount ?? "?"} requested · ${overview.archiveAvailable ? `${new Set(rows.map((row) => row.iteration)).size} completed iterations · regression ${count("passed")} passed / ${count("failed")} failed / ${count("inconclusive")} inconclusive / ${rows.filter((row) => !row.evaluation).length} unavailable` : "iteration results unavailable"}`,
+    `VOTING · ${overview.eligibleCount === undefined ? "not recorded" : `${overview.eligibleCount} eligible votes · ${overview.groups.length} patch groups`}`,
+    `REGRESSION · baseline ${regression(overview.baseline?.status)} · ${overview.testCommand ?? "command unavailable"} · timeout ${overview.testTimeoutMs === undefined ? "unknown" : `${overview.testTimeoutMs / 60000}m`}`,
+    ...patchVoteLines(view),
+  ].join("\n");
+}
+
+function overviewRows(view: ReplayView): Row[] {
+  const overview = view.overview;
+  const notes = [...overview.notes, ...view.diagnostics.map((d) => `Warning: ${d}`), ...overview.diagnostics.map((d) => `Warning: ${d}`)];
+  return [
+    { value: "result", label: "Result / diagnostics", details: [
+      "RESULT DETAILS", overview.headline, ...notes, "",
+      `Run: ${view.rootEntryId} · ${view.timestamp ?? "timestamp unavailable"}`,
+      `Working directory: ${overview.cwd ?? "unavailable"}`,
+      `Regression command: ${overview.testCommand ?? "unavailable"}`,
+      `Timeout: ${overview.testTimeoutMs ?? "unknown"}ms`,
+      `Baseline: ${regression(overview.baseline?.status)} · exit ${overview.baseline?.exitCode ?? "unavailable"} · duration ${overview.baseline?.durationMs ?? "unknown"}ms`,
+      ...(overview.baseline?.error ? [`Baseline error: ${overview.baseline.error}`] : []),
+      ...patchVoteLines(view),
+      `${view.steps.length} recorded steps · ${view.decisions.length} exploitation decisions`,
+      "Press e to reveal/hide baseline regression output.",
+    ].join("\n") },
+    ...overview.iterations.map((row) => ({
+      value: row.candidateEntryId, iteration: row.iteration,
+      label: `${row.representative ? "★ " : ""}#${row.iteration} ${row.approach} · ${regression(row.evaluation?.status)} · ${row.group ?? "—"} · ${row.vote}`,
+      details: [
+        `ITERATION ${row.iteration}${row.representative ? " · ★ selected representative" : ""}`,
+        `Approach: ${row.approach}`,
+        ...(row.targetStepId ? [`Replacement target: ${row.targetStepId}`] : []),
+        `Regression: ${regression(row.evaluation?.status)}`,
+        `Patch group: ${row.group ?? "unavailable"} · ${row.vote}`,
+        `Candidate: ${row.candidateEntryId}`,
+        ...(row.evaluation ? [
+          `Exit code: ${row.evaluation.exitCode ?? "unavailable"} · duration: ${row.evaluation.durationMs}ms`,
+          ...(row.evaluation.error ? [`Error: ${row.evaluation.error}`] : []),
+          `Killed: ${row.evaluation.killed ?? false}`,
+        ] : []),
+        "Enter to inspect recorded steps for this iteration.",
+        "Press e to reveal/hide captured regression output.",
+      ].join("\n"),
+    })),
+  ];
+}
 
 function trajectoryRows(view: ReplayView): Row[] {
   const children = new Map<string | undefined, ReplayStepView[]>();
@@ -74,7 +132,7 @@ function decisionRows(view: ReplayView): Row[] {
 
 /** A snapshot inspector: no session navigation, subscriptions, or replay actions. */
 export class ReplayDashboard implements Component {
-  private tab = 1;
+  private tab = 0;
   private runIndex: number;
   private rows: Row[] = [];
   private list?: SelectList;
@@ -100,15 +158,7 @@ export class ReplayDashboard implements Component {
 
   private resetRows(): void {
     const view = this.views[this.runIndex];
-    this.rows = this.tab === 0 ? this.views.map((run, index) => ({
-      value: String(index), label: `${run.active ? "* " : ""}${run.rootEntryId} ${run.timestamp ?? ""}`,
-      details: [
-        `Replay ${run.rootEntryId}`, `Prompt: ${run.prompt ?? "unknown"}`,
-        `Requested iterations: ${run.requestedCount ?? "unknown"}`,
-        `${run.steps.length} recorded steps; ${run.decisions.length} decisions`,
-        "Enter to inspect this run.", ...run.diagnostics.map((message) => `Warning: ${message}`),
-      ].join("\n"),
-    })) : !view ? [] : this.tab === 1 ? trajectoryRows(view) : decisionRows(view);
+    this.rows = !view ? [] : this.tab === 0 ? overviewRows(view) : this.tab === 1 ? trajectoryRows(view) : decisionRows(view);
     this.list = undefined;
     this.offset = 0;
     this.revealed = undefined;
@@ -126,7 +176,7 @@ export class ReplayDashboard implements Component {
       noMatch: (text) => this.theme.fg("dim", text),
     });
     const index = this.rows.findIndex((row) => row.value === selected);
-    this.list.setSelectedIndex(index >= 0 ? index : this.tab === 0 ? this.runIndex : 0);
+    this.list.setSelectedIndex(index >= 0 ? index : 0);
     this.list.onSelectionChange = () => { this.offset = 0; this.revealed = undefined; };
   }
 
@@ -138,10 +188,15 @@ export class ReplayDashboard implements Component {
       this.tab = (this.tab + 1) % 3;
       this.resetRows();
     } else if (matchesKey(data, "enter")) {
-      if (this.tab === 0 && this.list?.getSelectedItem()) {
-        this.runIndex = Number(this.list.getSelectedItem()!.value);
-        this.tab = 1;
-        this.resetRows();
+      const row = this.rows.find((item) => item.value === this.list?.getSelectedItem()?.value);
+      if (this.tab === 0 && row?.iteration) {
+        const step = this.views[this.runIndex].steps.find((step) => step.iterations.includes(row.iteration!));
+        if (step) {
+          this.tab = 1;
+          this.resetRows();
+          this.makeList(Math.max(1, this.listHeight));
+          this.list!.setSelectedIndex(this.rows.findIndex((item) => item.stepId === step.id));
+        } else this.detailFocus = true;
       } else this.detailFocus = !this.detailFocus;
     } else if (matchesKey(data, "right")) this.detailFocus = true;
     else if (matchesKey(data, "left")) this.detailFocus = false;
@@ -151,6 +206,17 @@ export class ReplayDashboard implements Component {
         this.revealed = this.revealed === undefined ? this.loadMessage(row.stepId) : undefined;
         this.offset = 0;
       }
+    } else if (data === "e" && this.tab === 0) {
+      const overview = this.views[this.runIndex].overview;
+      const selected = this.list?.getSelectedItem()?.value;
+      const evaluation = selected === "result" ? overview.baseline : overview.iterations.find((row) => row.candidateEntryId === selected)?.evaluation;
+      if (evaluation) {
+        this.revealed = this.revealed === undefined ? `stdout:\n${evaluation.stdout}\n\nstderr:\n${evaluation.stderr}` : undefined;
+        this.offset = 0;
+      }
+    } else if (data === "n" && this.views.length > 1) {
+      this.runIndex = (this.runIndex + 1) % this.views.length;
+      this.resetRows();
     } else if (matchesKey(data, "pageDown")) this.offset += 5;
     else if (matchesKey(data, "pageUp")) this.offset = Math.max(0, this.offset - 5);
     else if (this.detailFocus && matchesKey(data, "down")) this.offset++;
@@ -161,15 +227,18 @@ export class ReplayDashboard implements Component {
 
   render(width: number): string[] {
     if (width < 1) return [];
-    const height = Math.max(3, Math.min(30, this.terminalRows() - 5));
+    const view = this.views[this.runIndex];
+    const totalHeight = Math.max(3, Math.min(30, this.terminalRows() - 5));
+    const summary = this.tab === 0 && view ? new Text(safeDisplay(overviewSummary(view)), 0, 0).render(width)
+      .slice(0, Math.max(1, Math.floor(totalHeight / 2))) : [];
+    const height = Math.max(1, totalHeight - summary.length);
     const wide = width >= 100;
     const listHeight = wide ? Math.max(1, height - 1) : Math.min(5, Math.max(1, Math.floor(height / 3)));
     if (!this.list || this.listHeight !== listHeight) this.makeList(listHeight);
-    const view = this.views[this.runIndex];
     const row = this.rows.find((item) => item.value === this.list?.getSelectedItem()?.value);
     const detail = safeDisplay([
       row?.details ?? "No entries in this view.",
-      ...(this.revealed === undefined ? [] : ["", "Message (explicitly revealed):", this.revealed]),
+      ...(this.revealed === undefined ? [] : ["", this.tab === 0 ? "Regression output (explicitly revealed):" : "Message (explicitly revealed):", this.revealed]),
     ].join("\n"));
     const listWidth = wide ? Math.floor(width * 0.4) : width;
     const detailWidth = wide ? width - listWidth - 3 : width;
@@ -184,10 +253,11 @@ export class ReplayDashboard implements Component {
     }) : [...listLines, this.theme.fg("dim", "─".repeat(width)), ...visible];
     return [
       this.theme.fg("accent", `SWE-Replay · ${view?.rootEntryId ?? "no runs"} · read-only snapshot`),
-      ["Runs", "Trajectories", "Decisions"].map((name, index) => index === this.tab ? `[${name}]` : name).join("  "),
+      ["Overview", "Trajectories", "Decisions"].map((name, index) => index === this.tab ? `[${name}]` : name).join("  "),
+      ...summary,
       ...body,
-      this.theme.fg("dim", `Tab views · ↑↓ ${this.detailFocus ? "details" : "select"} · Enter ${this.tab === 0 ? "open run" : "focus"} · PgUp/PgDn details · r reveal · Esc back/close`),
-      this.theme.fg("dim", `${view?.diagnostics.length ?? 0} warnings (Runs view) · * active · f:pre-step files r:paragraphs · completion not recorded; no evaluation`),
+      this.theme.fg("dim", `Tab views · ↑↓ ${this.detailFocus ? "details" : "select"} · Enter ${this.tab === 0 ? "inspect/focus" : "focus"} · PgUp/PgDn details · ${this.tab === 0 ? "e evidence" : "r reveal"} · Esc back/close${this.views.length > 1 ? " · n next run" : ""}`),
+      this.theme.fg("dim", `${(view?.diagnostics.length ?? 0) + (view?.overview.diagnostics.length ?? 0)} warnings (Overview) · * active branch · ★ final representative · ← selected: exploitation target`),
     ].map((line) => truncateToWidth(line, width)).slice(0, Math.max(1, this.terminalRows()));
   }
 

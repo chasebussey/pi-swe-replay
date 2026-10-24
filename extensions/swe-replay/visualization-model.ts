@@ -1,6 +1,7 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { reasoningScore } from "./reasoning-score";
 import { parseSelectionTrace } from "./selection-trace";
+import { buildReplayOverview, type ReplayOverview } from "./overview-model";
 
 export interface ReplayStepView {
   id: string;
@@ -42,6 +43,7 @@ export interface ReplayView {
   steps: ReplayStepView[];
   decisions: ReplayDecisionView[];
   diagnostics: string[];
+  overview: ReplayOverview;
 }
 
 type RecordData = Record<string, unknown>;
@@ -79,6 +81,7 @@ export function buildReplayView(
     requestedCount: positiveInteger(metadata?.requestedPatchCount),
     active: active.has(rootEntryId),
     steps: [], decisions: [], diagnostics: [],
+    overview: { headline: "Outcome unavailable", notes: [], iterations: [], groups: [], diagnostics: [] },
   };
   if (!root || root.type !== "custom" || root.customType !== "swe-replay-root") {
     view.diagnostics.push("Replay root is missing or invalid.");
@@ -266,6 +269,7 @@ export function buildReplayView(
     }
     view.decisions.push(decision);
   }
+  view.overview = buildReplayOverview(entries.filter((entry) => owner(entry.id) === rootEntryId), rootEntryId);
   return view;
 }
 
@@ -273,9 +277,14 @@ export function replaySummary(view: ReplayView): string {
   return [
     `Replay ${view.rootEntryId}${view.active ? " (active branch)" : ""}`,
     `Prompt: ${view.prompt ?? "unknown"}; requested iterations: ${view.requestedCount ?? "unknown"}`,
-    `${view.steps.length} recorded steps; ${view.decisions.length} exploitation decisions`,
+    view.overview.headline,
+    `${view.overview.archiveAvailable ? `${view.overview.iterations.length} completed candidates` : "Completed candidates unavailable"}; ${view.steps.length} recorded steps; ${view.decisions.length} exploitation decisions`,
+    `Baseline: ${view.overview.baseline?.status ?? "unavailable"}; regression command: ${view.overview.testCommand ?? "unavailable"}`,
+    ...view.overview.iterations.map((row) => `Iteration ${row.iteration}: ${row.approach} · regression ${row.evaluation?.status ?? "unavailable"} · ${row.group ?? "—"} · ${row.vote}${row.representative ? " · selected representative" : ""}`),
+    ...view.overview.notes,
+    ...view.overview.groups.map((group) => `${group.label}: ${group.votes} votes · iterations ${group.iterations.join(", ")}${group.selected ? " · selected" : ""}`),
     ...view.decisions.map((decision) => `Iteration ${decision.iteration ?? "?"}: ${decision.outcome}${decision.selectedStepId ? ` → ${decision.selectedStepId}` : ""}${decision.fallbackReason ? ` (${decision.fallbackReason})` : ""}`),
-    ...view.diagnostics.map((message) => `Warning: ${message}`),
-    "Read-only snapshot. Decisions record selection, not generation completion; regression outcomes are not displayed here.",
+    ...[...view.diagnostics, ...view.overview.diagnostics].map((message) => `Warning: ${message}`),
+    "Read-only snapshot. Decisions record selection, not generation completion; Overview uses captured result evidence.",
   ].join("\n");
 }
