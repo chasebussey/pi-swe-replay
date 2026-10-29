@@ -8,6 +8,9 @@ The extension implements exploration, exploitation, and regression-filtered fina
 
 ## Getting started
 
+Requires **Pi 1.4.0 or later within major version 1**. The live console relies on
+Pi's extension-dialog stack to yield to approval/input dialogs and regain focus.
+
 ```bash
 npm ci
 pi --extension ./extensions/index.ts
@@ -32,10 +35,63 @@ Worktrees share Git metadata and OS permissions: this is not a security sandbox.
 | Command | What it does |
 |---|---|
 | `/swe-replay <n> <prompt>` | Runs `n` iterations, validates and votes on completed patches, then restores the selected workspace and conversation. |
-| `/swe-replay-view` | Opens a single-run overview with iteration results, final votes, and restoration status, plus trajectory/decision drill-downs. Outside TUI mode, prints a summary. |
+| `/swe-replay-view` | Reveals the live console during an active TUI run; otherwise opens the captured overview with trajectory/decision drill-downs. Outside TUI mode, prints a summary. |
 | `/inspect-session` | Dumps persisted SWE-Replay entries on the active session branch. |
 
 `n` controls iterations, not distinct patches. Repeated equivalent passing outcomes contribute repeated votes. There is no patch export command yet.
+
+## Live run console
+
+In TUI mode, a run automatically opens a foreground console. The start command
+returns while a session-owned controller continues the run. Closing a view is
+not a replay-completion or cancellation signal. RPC/non-TUI runs retain the
+existing awaited execution and notification behavior; they do not mount terminal components.
+
+The console shows explicit phases (preparation, baseline, generation, capture,
+regression, navigation/restoration, normalization, voting, and winner restoration),
+completed-iteration counts, regression outcomes, iteration lineage labels, active
+tools, and a bounded recent-activity feed. Exploitation labels identify the original
+generating iteration where available and the exact step replaced **before** execution.
+They do not imply that generation or restoration has already succeeded.
+
+| Key | Live console action |
+| --- | --- |
+| ↑ / ↓ | Inspect an iteration without navigating the session or restoring files |
+| `f` | Follow the live iteration again |
+| `d` | Open the existing read-only dashboard over the console; close it to return |
+| Escape | Collapse to a compact transcript-inspection strip |
+| `v` (compact mode) | Reveal the foreground console again |
+| `a` (foreground), Escape (compact mode) | Interrupt an active agent turn using Pi's existing abort API |
+| Enter / Escape (finished) | Dismiss the result and return to ordinary chat |
+
+The compact strip deliberately **does not expose the normal chat editor**. While
+replay owns the workspace, unrelated prompts, user shell commands, and conflicting
+session navigation/switch/fork/manual-compaction operations are blocked. Use `v` to
+reopen from that strip; it is not a slash-command editor. External command clients
+can also invoke `/swe-replay-view`. Do not run other agents, extensions that mutate
+the workspace, or external edits concurrently; these guards are not a security sandbox.
+
+Inspection selection remains stable as new iterations arrive. The dashboard opened
+with `d` is a captured snapshot, not a second live feed; reopen it to refresh.
+Tool arguments are abbreviated, output/reasoning is not streamed into the default
+view, and regression evidence stays outside model context. Native approval/input
+dialogs take focus above the console. Pi reports only the outermost UI prompt, so
+nested dialogs are answerable but do not reliably produce a separate “awaiting input”
+status in the underlying console.
+
+There is **no new whole-run Stop or pause/resume control**. Agent interruption is
+not cancellation of disposable evaluation, normalization, or a Git restoration.
+An aborted trajectory prevents automatic final selection. During shutdown/reload,
+the controller invalidates further work and waits for in-flight operations before
+teardown; an evaluation may take up to its existing ten-minute timeout. A hard
+process termination still has the existing partial-restoration risks.
+
+Final votes appear only after finalization, never as a provisional leaderboard.
+The result uses captured selection/restoration evidence, including no-winner and
+restoration-failure outcomes. If still foregrounded, it remains until dismissed.
+If compact, completion closes the strip and issues one result notification without
+reopening the foreground screen. No new persisted record schema is introduced:
+liveness is ephemeral, while existing archive records remain authoritative.
 
 ## How replay works
 
@@ -103,11 +159,11 @@ are recorded separately and reported as errors, not successful completion. After
 a file mutation failure, recovery of the pre-restoration workspace and conversation
 is best-effort; recovery failure remains explicit and the backup is retained.
 Do not create commits, run another agent, or edit files concurrently with replay.
-Patch artifact export and live progress reporting remain separate future work.
+Patch artifact export remains future work; live progress is presented by the TUI console.
 
 ## Reading the dashboard
 
-Open `/swe-replay-view` to inspect a run. The dashboard is read-only: selecting a step does not navigate the session or restore files. Reopen it to refresh. It opens on **Overview** for the run on the active branch (or the latest recorded run if none is active). Archived branches are included.
+After a run, open `/swe-replay-view` to inspect its captured results. During a live run, press `d` from the console instead. The dashboard is read-only: selecting a step does not navigate the session or restore files. Reopen it to refresh. It opens on **Overview** for the run on the active branch (or the latest recorded run if none is active). Archived branches are included.
 
 ### Overview
 
@@ -295,8 +351,7 @@ Replay state is persisted in custom session entries:
 The empty continuation trigger is a `swe-replay-continue` custom message. Step-boundary entries let future navigation retain that message: Pi otherwise navigates before user and custom messages.
 
 `/inspect-session` only shows entries on the active branch. The dashboard shows
-exploitation records across archived branches, but does not yet display final
-selection details. After restoring an archived winner, the final-selection entry
+captured iteration, exploitation, final-selection, and restoration outcomes across archived branches. After restoring an archived winner, the final-selection entry
 can remain on the final iteration's archived branch; the active restoration record
 references it by `selectionEntryId`. All records remain in the session JSONL.
 
@@ -355,5 +410,5 @@ or migration for historical session records. `replay-records.ts` separately pars
 explicit v1 archive associations across all branches. `finalize-run.ts` performs
 one normalization batch after completion and persists the decision;
 `restore-winner.ts` then restores the representative and aligns conversation.
-Commands report the result, but detailed dashboard outcome UI and explicit artifact
-export remain unimplemented.
+The live console and captured dashboard report outcomes; explicit artifact export
+remains unimplemented.

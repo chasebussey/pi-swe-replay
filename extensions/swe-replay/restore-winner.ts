@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { appendReplayRecord, type ReplayCandidateRecord } from "./replay-records";
+import { unobservedExecution, type ReplayExecution } from "./run-progress";
 import type { ReplayWorkspace, WorkspaceSnapshot } from "./workspace";
 
 interface RestorationAssociation {
@@ -29,6 +30,7 @@ export async function restoreWinner(
   selectionEntryId: string,
   candidate: ReplayCandidateRecord & { entryId: string },
   initial: WorkspaceSnapshot,
+  execution: ReplayExecution = unobservedExecution,
 ): Promise<Exclude<WinnerRestoration, { status: "started" }>> {
   const fromEntry = ctx.sessionManager.getLeafEntry();
   if (!fromEntry) throw new Error("No session position to back up before winner restoration.");
@@ -43,7 +45,9 @@ export async function restoreWinner(
   let mutated = false;
 
   try {
+    execution.assertActive();
     backup = await workspace.capture(candidate.rootEntryId, fromEntry.id);
+    execution.assertActive();
     if (!ctx.isIdle() || ctx.sessionManager.getLeafEntry()?.id !== fromEntry.id) {
       throw new Error("Session changed while capturing the winner-restoration backup.");
     }
@@ -59,6 +63,7 @@ export async function restoreWinner(
     if (target?.type !== "custom" || target.customType !== "swe-replay-candidate"
       || target.parentId !== candidate.terminalEntryId) throw new Error("Winner context anchor is unavailable.");
     const navigation = await ctx.navigateTree(candidate.entryId, { summarize: false });
+    execution.assertActive();
     if (navigation.cancelled) throw new Error("Winner conversation navigation was cancelled.");
     if (ctx.sessionManager.getLeafEntry()?.id !== candidate.entryId) {
       throw new Error("Winner conversation navigation did not reach the candidate anchor.");
@@ -68,16 +73,20 @@ export async function restoreWinner(
     // different HEAD than the frozen run base, even if its own HEAD still matches.
     await workspace.assertHeadUnchanged(initial);
     await workspace.restore(candidate.snapshot, () => {
+      execution.assertActive();
       if (!ctx.isIdle() || ctx.sessionManager.getLeafEntry()?.id !== candidate.entryId) {
         throw new Error("Session changed before winner file restoration.");
       }
       mutated = true;
     });
+    execution.assertActive();
     appendReplayRecord(pi, ctx, "swe-replay-workspace", candidate.snapshot);
     const result: WinnerRestoration = { ...association, status: "restored", attemptEntryId, backupEntryId };
     appendReplayRecord(pi, ctx, "swe-replay-restoration", result);
     return result;
   } catch (error) {
+    // A torn-down runtime must not start recovery mutations in a replacement session.
+    execution.assertActive();
     // Best effort recovery of BOTH halves; never label a partially applied winner
     // as restored. The started record retains recovery identity if Pi exits here.
     let workspaceRecovery: "not-needed" | "restored" | "failed" = "not-needed";

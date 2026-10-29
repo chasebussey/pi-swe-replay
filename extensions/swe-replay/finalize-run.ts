@@ -6,6 +6,7 @@ import {
   type ReplayArchive, type ReplayFinalSelectionRecord, type ReplayIdentityRecord,
 } from "./replay-records";
 import { restoreWinner, type WinnerRestoration } from "./restore-winner";
+import { unobservedExecution, type ReplayExecution } from "./run-progress";
 import type { ReplayWorkspace } from "./workspace";
 
 export interface FinalizedReplay {
@@ -25,6 +26,7 @@ function archiveAt(ctx: ExtensionCommandContext, rootEntryId: string): ReplayArc
 /** Called only after the requested generation/evaluation loop completes. */
 export async function finalizeReplay(
   pi: ExtensionAPI, ctx: ExtensionCommandContext, workspace: ReplayWorkspace, rootEntryId: string,
+  execution: ReplayExecution = unobservedExecution,
 ): Promise<FinalizedReplay> {
   let phase = "archive";
   let selection: FinalSelectionDecision;
@@ -32,6 +34,7 @@ export async function finalizeReplay(
   let archive: ReplayArchive;
 
   try {
+    execution.assertActive();
     archive = archiveAt(ctx, rootEntryId);
     const { candidates, base } = archive;
     // Validate completion BEFORE spending normalization work. Identity records do
@@ -39,10 +42,16 @@ export async function finalizeReplay(
     assertReplayComplete(archive);
 
     phase = "normalization";
+    execution.report({ type: "phase", phase: "normalizing" });
     ctx.ui.notify("Grouping completed replay patches…", "info");
     const trees = [];
-    for (const candidate of candidates) trees.push(await workspace.contentTree(candidate.snapshot));
-    const normalized = await normalizeWorkspacePatches(workspace, base.tree, trees, { signal: ctx.signal });
+    for (const candidate of candidates) {
+      execution.assertActive();
+      trees.push(await workspace.contentTree(candidate.snapshot));
+    }
+    execution.assertActive();
+    const normalized = await normalizeWorkspacePatches(workspace, base.tree, trees, { signal: execution.signal ?? ctx.signal });
+    execution.assertActive();
     // Persist only after the entire batch succeeds. Infrastructure errors cannot
     // become partial exact-content votes or a partial-run selection.
     for (const [index, candidate] of candidates.entries()) {
@@ -53,6 +62,7 @@ export async function finalizeReplay(
     }
 
     phase = "selection";
+    execution.report({ type: "phase", phase: "voting" });
     archive = archiveAt(ctx, rootEntryId);
     selection = selectFinalPatch(archive.base, completedSelectionInputs(archive), archive.evaluations);
     selectionEntryId = appendReplayRecord<ReplayFinalSelectionRecord>(pi, ctx, "swe-replay-final-selection", {
@@ -61,6 +71,7 @@ export async function finalizeReplay(
       evaluationEntryIds: [...archive.baselineEntryIds, ...archive.evaluations.map((e) => e.entryId)], decision: selection,
     });
   } catch (error) {
+    execution.assertActive();
     appendReplayRecord(pi, ctx, "swe-replay-finalization-error", {
       schemaVersion: 1, rootEntryId, phase, error: String(error).slice(-4000),
     });
@@ -70,7 +81,9 @@ export async function finalizeReplay(
   if (selection.status === "no-valid-candidates") return { selectionEntryId, selection };
   const candidate = archive.candidates.find((c) => c.entryId === selection.selectedCandidateEntryId);
   if (!candidate) throw new Error("Selected representative is missing from the completed archive.");
-  const restoration = await restoreWinner(pi, ctx, workspace, selectionEntryId, candidate, archive.base.snapshot);
+  execution.assertActive();
+  execution.report({ type: "phase", phase: "restoring-winner" });
+  const restoration = await restoreWinner(pi, ctx, workspace, selectionEntryId, candidate, archive.base.snapshot, execution);
   if (restoration.status === "failed") {
     const recovery = restoration.recoveryErrors.length ? ` Recovery failed: ${restoration.recoveryErrors.join("; ")}` : "";
     throw new Error(`Final patch selected, but restoration failed: ${restoration.error}.${recovery} Inspect swe-replay-restoration and the retained recovery snapshot.`);

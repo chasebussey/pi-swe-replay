@@ -1,19 +1,30 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { parseSweReplayRequest, runSweReplay } from "./swe-replay/run";
+import { ReplayRunController } from "./swe-replay/run-controller";
 import { showReplayView } from "./swe-replay/ui/show-view";
 
 /** SWE-Replay commands and read-only inspection. */
 export default function (pi: ExtensionAPI) {
+  const controller = new ReplayRunController(pi);
+
   pi.registerCommand("swe-replay", {
     description: "Generate, validate, select and restore a replay patch (usage: /swe-replay <n> <prompt>)",
     handler: async (args, ctx) => {
       const request = parseSweReplayRequest(args);
 
       if (!request) {
-        ctx.ui.notify("Usage: /swe-replay <positive number of patches> <prompt>", "error");
+        ctx.ui.notify("Usage: /swe-replay <positive number of iterations> <prompt>", "error");
         return;
       }
 
+      if (controller.isRunning()) {
+        ctx.ui.notify("A SWE-Replay run is already active.", "warning");
+        return;
+      }
+      if (!ctx.isIdle()) {
+        ctx.ui.notify("Wait for the agent to become idle before starting SWE-Replay.", "warning");
+        return;
+      }
       if (!ctx.hasUI) {
         ctx.ui.notify("SWE-Replay currently requires UI input for its regression test command.", "error");
         return;
@@ -21,6 +32,10 @@ export default function (pi: ExtensionAPI) {
       const testCommand = await ctx.ui.input("Regression test command", "e.g. npm ci && npm test");
       if (!testCommand?.trim()) {
         ctx.ui.notify("Replay cancelled: a regression test command is required.", "info");
+        return;
+      }
+      if (ctx.mode === "tui") {
+        controller.start(ctx, request.n, request.prompt, testCommand.trim());
         return;
       }
       const run = await runSweReplay(pi, ctx, request.n, request.prompt, testCommand.trim());
@@ -42,7 +57,9 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("swe-replay-view", {
     description: "Inspect replay trajectories and selection decisions (read-only)",
-    handler: async (_args, ctx) => showReplayView(ctx),
+    handler: async (_args, ctx) => {
+      if (!controller.show(ctx)) await showReplayView(ctx);
+    },
   });
 
   pi.registerCommand("inspect-session", {

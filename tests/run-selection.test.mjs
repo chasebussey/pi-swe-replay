@@ -177,6 +177,35 @@ test("exploitation restores pre-step context and continues via an empty custom m
   assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
 });
 
+test("live observations distinguish captured candidates, evaluation, and final restoration", async (t) => {
+  const h = harness(false, t);
+  const events = [];
+  await run(h.pi, h.ctx, 1, "task", "true", { assertActive() {}, report: (event) => events.push(event) });
+  assert.equal(events[0].phase, "preparing");
+  assert.equal(events.find((event) => event.type === "root").rootEntryId, h.entries[0].id);
+  const candidate = events.findIndex((event) => event.type === "candidate");
+  const evaluation = events.findIndex((event) => event.type === "evaluation" && event.iteration === 1);
+  const normalization = events.findIndex((event) => event.phase === "normalizing");
+  const voting = events.findIndex((event) => event.phase === "voting");
+  const restoration = events.findIndex((event) => event.phase === "restoring-winner");
+  assert.ok(candidate < evaluation && evaluation < normalization && normalization < voting && voting < restoration);
+  assert.deepEqual(events.find((event) => event.type === "iteration"), { type: "iteration", iteration: 1, approach: "explore" });
+});
+
+test("runtime invalidation releases settlement listeners and never finalizes an unfinished run", async (t) => {
+  const h = harness(false, t);
+  const lifetime = new AbortController();
+  h.pi.sendUserMessage = () => { lifetime.abort(); };
+  await assert.rejects(run(h.pi, h.ctx, 1, "task", "true", {
+    signal: lifetime.signal,
+    assertActive() { if (lifetime.signal.aborted) throw new Error("invalidated"); },
+    report() {},
+  }), /invalidated/);
+  assert.equal(records(h, "swe-replay-final-selection").length, 0);
+  assert.equal(records(h, "swe-replay-candidate").length, 0);
+  assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
+});
+
 test("persisted selection traces identify the passed-trajectory-occurrences eligibility policy", async (t) => {
   t.mock.method(Math, "random", () => 0.9);
   const h = harness(true, t);
@@ -412,7 +441,9 @@ test("partial winner apply failure recovers both original workspace and conversa
   const restore = ReplayWorkspace.prototype.restore;
   t.mock.method(ReplayWorkspace.prototype, "restore", async function (snapshot, beforeMutation) {
     await restore.call(this, snapshot, beforeMutation);
-    if (beforeMutation) throw new Error("Apply failed after mutation");
+    if (beforeMutation && h.ctx.sessionManager.getLeafEntry()?.customType === "swe-replay-candidate") {
+      throw new Error("Apply failed after mutation");
+    }
   });
   await assert.rejects(runSweReplay(h.pi, h.ctx, 2, "task"), /Apply failed after mutation/);
   assert.equal(readFileSync(join(h.ctx.cwd, "a"), "utf8"), "B");
