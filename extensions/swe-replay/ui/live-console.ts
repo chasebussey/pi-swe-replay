@@ -3,6 +3,8 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Component } from "@earendil-works/pi-tui";
 import { ReplayLiveState, type LiveIteration, type LiveReplaySnapshot } from "../live-state";
 import { safeDisplay } from "./dashboard";
+import { buildIterationLineage, type IterationLineage } from "./iteration-lineage";
+import { layoutSearchShape, renderSearchShape, type SearchShape } from "./search-shape";
 
 const line = (text: string) => safeDisplay(text).replace(/\n/g, " ");
 const elapsed = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
@@ -13,10 +15,14 @@ export function liveStatus(state: LiveReplaySnapshot): string {
   return state.phase.replace(/-/g, " ").toUpperCase();
 }
 
-function iterationLabel(row: LiveIteration): string {
-  const origin = row.targetStepId ? ` ← ${row.sourceIteration ? `#${row.sourceIteration} ` : ""}before ${row.targetStepId}` : "";
+function iterationLabel(row: LiveIteration, compact = false): string {
+  let origin = "";
+  if (row.approach === "exploit") {
+    const source = row.sourceIteration ? `#${row.sourceIteration}` : "origin unavailable";
+    origin = compact ? ` ← ${source}` : ` ← ${source} before ${row.targetStepId ?? "unknown step"}`;
+  }
   const status = row.regression?.toUpperCase() ?? (row.completed ? "awaiting regression" : "in progress");
-  return `#${row.iteration} ${row.approach}${origin} · ${status}`;
+  return `#${row.iteration} ${row.approach} · ${status}${origin}`;
 }
 
 /** This component owns display only. Compact mode deliberately does not expose the core editor. */
@@ -27,6 +33,9 @@ export class ReplayLiveConsole implements Component {
   private unsubscribe: () => void;
   private timer: ReturnType<typeof setInterval>;
   private disposed = false;
+  private lineageIterations?: readonly LiveIteration[];
+  private lineage?: IterationLineage;
+  private graph?: { signature: string; shape: SearchShape };
 
   constructor(
     private state: ReplayLiveState,
@@ -70,9 +79,14 @@ export class ReplayLiveConsole implements Component {
     else if (data === "f") { this.follow = true; this.selectedIteration = undefined; }
     else if (this.keys.matches(data, "tui.select.confirm") && state.status !== "running") { this.close(); return; }
     else if (this.keys.matches(data, "tui.select.up") || this.keys.matches(data, "tui.select.down")) {
-      const current = this.selectedIteration ?? state.iteration;
+      const rows = this.getLineage(state).rows;
+      if (rows.length === 0) return;
+      const representative = state.result?.overview.iterations.find((row) => row.representative)?.iteration;
+      const current = this.follow ? representative ?? state.iteration : this.selectedIteration;
+      const index = Math.max(0, rows.findIndex((row) => row.node.iteration === current));
       const direction = this.keys.matches(data, "tui.select.up") ? -1 : 1;
-      this.selectedIteration = Math.max(1, Math.min(state.iterations.length, current + direction));
+      const next = Math.max(0, Math.min(rows.length - 1, index + direction));
+      this.selectedIteration = rows[next].node.iteration;
       this.follow = false;
     }
     this.requestRender();
@@ -110,25 +124,65 @@ export class ReplayLiveConsole implements Component {
       ? "↑↓ inspect · f follow · d recorded details · Esc hide · a interrupt agent"
       : "Enter / Esc return to chat · d captured outcome details";
     const available = Math.max(0, height - header.length - 1);
-    const selectedIndex = Math.max(0, state.iterations.findIndex((item) => item.iteration === selected));
-    const start = Math.max(0, selectedIndex - Math.floor(Math.max(1, available - 2) / 2));
-    const iterations = state.iterations.slice(start).map((item) => `${item.iteration === selected ? "> " : "  "}${item.iteration === representative ? "★ " : ""}${iterationLabel(item)}`);
-    const left = ["ITERATIONS", ...iterations];
-    const right = ["CURRENT ACTIVITY / OUTCOME", ...details];
+    const lineage = this.getLineage(state);
+    const selectedIndex = Math.max(0, lineage.rows.findIndex((item) => item.node.iteration === selected));
+    const lineageHeight = width >= 110 ? available : available >= 10 ? Math.min(7, Math.floor(available * 0.45)) : 0;
+    const visibleRows = Math.max(0, lineageHeight - 2);
+    const centeredStart = selectedIndex - Math.floor(Math.max(0, visibleRows - 1) / 2);
+    const start = Math.max(0, Math.min(centeredStart, lineage.rows.length - visibleRows));
+    const byIteration = new Map(state.iterations.map((item) => [item.iteration, item]));
+    const iterations = lineage.rows.slice(start, start + visibleRows).map(({ node, prefix }) => {
+      const marker = `${node.iteration === selected ? "> " : "  "}${node.iteration === representative ? "★ " : ""}`;
+      return `${marker}${prefix}${iterationLabel(byIteration.get(node.iteration)!, true)}`;
+    });
+    const left = ["ITERATION LINEAGE", `◆ Replay root${start ? ` · ↑ ${start} above` : ""}`, ...iterations];
+    const right = ["CURRENT ACTIVITY / OUTCOME", ...details].map(line);
     const body: string[] = [];
 
     if (width >= 110) {
       const leftWidth = Math.floor(width * 0.45);
+      const rightWidth = width - leftWidth - 2;
+      let rightPane = right;
+      if (available >= 14 && rightWidth >= 32) {
+        const graphHeight = Math.min(16, Math.floor(available * 0.6));
+        const activityHeight = available - graphHeight - 2;
+        const shape = this.getShape(lineage, rightWidth, graphHeight);
+        const activity = Array.from({ length: activityHeight }, (_, index) => right[index] ?? "");
+        const graph = renderSearchShape(shape, lineage, {
+          selectedIteration: selected,
+          activeIteration: state.status === "running" ? state.iteration : undefined,
+          representativeIteration: representative,
+          pulse: state.status === "running" && Math.floor(Date.now() / 1000) % 2 === 0,
+        }, (tone, text) => this.theme.fg(tone, text));
+        rightPane = [...activity, "─".repeat(rightWidth), `SEARCH SHAPE${shape.bundled ? " · bundled" : ""}`, ...graph];
+      }
       for (let index = 0; index < available; index++) {
         const leftLine = truncateToWidth(line(left[index] ?? ""), leftWidth - 2);
-        body.push(`${leftLine}${" ".repeat(Math.max(0, leftWidth - visibleWidth(leftLine)))}│ ${line(right[index] ?? "")}`);
+        body.push(`${leftLine}${" ".repeat(Math.max(0, leftWidth - visibleWidth(leftLine)))}│ ${rightPane[index] ?? ""}`);
       }
     } else {
-      // Short/narrow layouts favor current activity; the selected iteration remains explicit.
-      body.push(...[...(row ? [iterationLabel(row)] : []), ...right].map(line));
+      // Stack the tree above activity on narrow screens; omit the decorative graph first.
+      if (lineageHeight > 0) body.push(...left.slice(0, lineageHeight).map(line), "─".repeat(width), ...right);
+      else body.push(...[...(row ? [iterationLabel(row)] : []), ...right].map(line));
     }
     return [...header, ...body.slice(0, available), footer].slice(0, height)
       .map((text) => truncateToWidth(text, width));
+  }
+
+  private getLineage(state: LiveReplaySnapshot): IterationLineage {
+    if (!this.lineage || this.lineageIterations !== state.iterations) {
+      this.lineage = buildIterationLineage(state.iterations);
+      this.lineageIterations = state.iterations;
+    }
+    return this.lineage;
+  }
+
+  private getShape(lineage: IterationLineage, width: number, height: number): SearchShape {
+    const cached = this.graph;
+    if (!cached || cached.signature !== lineage.signature || cached.shape.width !== width || cached.shape.height !== height) {
+      this.graph = { signature: lineage.signature, shape: layoutSearchShape(lineage, width, height) };
+    }
+    return this.graph!.shape;
   }
 
   private details(state: LiveReplaySnapshot, row?: LiveIteration): string[] {
@@ -143,7 +197,7 @@ export class ReplayLiveConsole implements Component {
       ];
     }
     if (!this.follow && row) {
-      return [iterationLabel(row), row.targetStepId ? `Replaced step: ${row.targetStepId}` : "Started from replay root.",
+      return [iterationLabel(row), row.approach === "exploit" ? `Replaced step: ${row.targetStepId ?? "unavailable"}` : "Started from replay root.",
         "d opens captured trajectories, decisions and regression evidence.", "Live activity continues without moving your selection."];
     }
     return [

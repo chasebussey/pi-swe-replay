@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createJiti } from "jiti";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { sliceByColumn, visibleWidth } from "@earendil-works/pi-tui";
 
 const jiti = createJiti(import.meta.url, { fsCache: false });
 const { ReplayLiveState } = await jiti.import("../extensions/swe-replay/live-state.ts");
@@ -142,6 +142,87 @@ test("live layout fits terminal size and sanitizes untrusted paths/messages", (t
   h.component.invalidate();
   h.component.dispose();
   h.component.dispose();
+});
+
+test("wide console places a vertical graph below activity while the tree spans the left pane", (t) => {
+  const state = new ReplayLiveState("task", 40);
+  for (let index = 1; index <= 30; index++) iteration(state, index);
+  const h = consoleHarness(state, t);
+  h.resize(36);
+  const lines = h.component.render(140);
+  const activity = lines.findIndex((line) => line.includes("CURRENT ACTIVITY"));
+  const graph = lines.findIndex((line) => line.includes("SEARCH SHAPE"));
+  assert.match(lines.join("\n"), /ITERATION LINEAGE/);
+  assert.ok(graph > activity);
+  assert.ok(lines.slice(graph + 1).some((line) => line.includes("#30 explore")));
+  assert.ok(lines.slice(graph + 1).some((line) => /◆|░|▒|▓/.test(sliceByColumn(line, 65, 75))));
+  assert.ok(lines.every((line) => visibleWidth(line) <= 140));
+});
+
+test("narrow and short screens omit the graph before the readable lineage/activity", (t) => {
+  const state = new ReplayLiveState("task", 2);
+  iteration(state, 1);
+  const h = consoleHarness(state, t);
+  h.resize(24);
+  const narrow = h.component.render(80).join("\n");
+  assert.match(narrow, /ITERATION LINEAGE/);
+  assert.match(narrow, /CURRENT ACTIVITY/);
+  assert.doesNotMatch(narrow, /SEARCH SHAPE/);
+  h.resize(18);
+  const short = h.component.render(140).join("\n");
+  assert.match(short, /ITERATION LINEAGE/);
+  assert.match(short, /CURRENT ACTIVITY/);
+  assert.doesNotMatch(short, /SEARCH SHAPE/);
+});
+
+test("tree navigation follows displayed lineage order and preserves selected identity as a new sibling arrives", (t) => {
+  const state = new ReplayLiveState("task", 4);
+  iteration(state, 1);
+  iteration(state, 2);
+  state.report({ type: "iteration", iteration: 3, approach: "exploit", sourceIteration: 1, targetStepId: "step-1" });
+  const h = consoleHarness(state, t);
+  const tree = h.component.render(140).join("\n");
+  assert.ok(tree.indexOf("#1 explore") < tree.indexOf("#3 exploit"));
+  assert.ok(tree.indexOf("#3 exploit") < tree.indexOf("#2 explore"));
+  h.component.handleInput("\x1b[A"); // #3's predecessor in the tree is #1, not #2.
+  assert.match(h.component.render(100).join("\n"), /Inspecting #1/);
+  h.component.handleInput("\x1b[B");
+  assert.match(h.component.render(100).join("\n"), /Inspecting #3/);
+  h.component.handleInput("\x1b[B");
+  assert.match(h.component.render(100).join("\n"), /Inspecting #2/);
+  state.report({ type: "iteration", iteration: 4, approach: "exploit", sourceIteration: 1, targetStepId: "step-2" });
+  assert.match(h.component.render(100).join("\n"), /Inspecting #2 · live: #4/);
+  h.component.handleInput("f");
+  assert.match(h.component.render(100).join("\n"), /Following live · iteration 4/);
+});
+
+test("graph shape is stable across tool/regression updates and selection; finalization alone supplies the winner", (t) => {
+  t.mock.method(Date, "now", () => 1000);
+  t.mock.method(Math, "random", () => { throw new Error("must not sample"); });
+  const state = new ReplayLiveState("task", 3);
+  iteration(state, 1);
+  iteration(state, 2);
+  state.report({ type: "iteration", iteration: 3, approach: "exploit", sourceIteration: 1, targetStepId: "step-1" });
+  const h = consoleHarness(state, t);
+  h.resize(36);
+  const graph = () => {
+    const lines = h.component.render(140);
+    const start = lines.findIndex((line) => line.includes("SEARCH SHAPE"));
+    return lines.slice(start + 1, -1).map((line) => sliceByColumn(line, 65, 75)).join("\n");
+  };
+  const before = graph();
+  state.activity("read a.ts");
+  state.report({ type: "candidate", iteration: 3 });
+  state.report({ type: "evaluation", iteration: 3, status: "passed" });
+  assert.equal(graph(), before);
+  h.component.handleInput("\x1b[A");
+  assert.equal(graph(), before);
+  assert.doesNotMatch(graph(), /★/);
+  state.finish({ overview: { headline: "Selected iteration 1", groups: [], notes: [], iterations: [{ iteration: 1, representative: true }] } });
+  const finished = graph();
+  assert.match(finished, /★/);
+  assert.doesNotMatch(finished, /◉|◎/);
+  assert.equal(graph(), finished);
 });
 
 function controllerHarness(execute, t) {

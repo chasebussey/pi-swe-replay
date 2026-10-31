@@ -49,14 +49,45 @@ existing awaited execution and notification behavior; they do not mount terminal
 
 The console shows explicit phases (preparation, baseline, generation, capture,
 regression, navigation/restoration, normalization, voting, and winner restoration),
-completed-iteration counts, regression outcomes, iteration lineage labels, active
-tools, and a bounded recent-activity feed. Exploitation labels identify the original
-generating iteration where available and the exact step replaced **before** execution.
-They do not imply that generation or restoration has already succeeded.
+completed-iteration counts, regression outcomes, a navigable iteration lineage tree,
+active tools, and a bounded recent-activity feed. Exploration and fallback attach to
+the replay root; exploitation attaches to the original generating iteration where
+available. Inspecting an iteration shows the exact step replaced **before** execution.
+These labels do not imply that generation or restoration has already succeeded.
+
+On sufficiently wide/tall terminals, an unlabeled **vertical search-shape graph**
+sits below the activity pane while the lineage tree spans the left side:
+
+```text
+ITERATION LINEAGE                 │ CURRENT ACTIVITY / OUTCOME
+◆ Replay root                    │ Editing src/parser.ts
+  ├─ #1 explore · PASSED          │ Running parser tests…
+  │  ├─ #3 exploit · FAILED ← #1  ├─────────────────────────────
+  │  └─ #4 exploit · in progress │ SEARCH SHAPE
+  └─ #2 explore · PASSED          │             ◆
+                                 │        ┌────┴────┐
+                                 │        ●         ●
+                                 │     ┌──┴──┐
+                                 │     ●     ◉
+```
+
+Graph position encodes lineage, not elapsed time, patch similarity, or quality.
+The selected iteration's ancestry is accented, the active iteration subtly pulses,
+and a captured final representative gets a `★`. No provisional winner is inferred.
+The graph deliberately omits regression colors; outcomes remain in the tree.
+
+The graph has a fixed canvas. Crowded siblings and deep subtrees become `░` / `▒` /
+`▓` bundles; darker bundles represent more hidden nodes, not better candidates.
+If a highlighted iteration is bundled, its bundle is highlighted instead of
+pretending that every iteration is drawn individually. Missing or invalid exploit
+origins stay disconnected (`?`), never guessed as exploration. Geometry is cached
+across selection, tool, and regression updates; ancestry growth or resizing may
+reflow/compact it. At completion, animation stops. Narrow screens stack lineage
+above activity and omit the graph; very short screens favor current activity.
 
 | Key | Live console action |
 | --- | --- |
-| ↑ / ↓ | Inspect an iteration without navigating the session or restoring files |
+| ↑ / ↓ | Inspect an iteration in displayed tree order, without navigating the session or restoring files |
 | `f` | Follow the live iteration again |
 | `d` | Open the existing read-only dashboard over the console; close it to return |
 | Escape | Collapse to a compact transcript-inspection strip |
