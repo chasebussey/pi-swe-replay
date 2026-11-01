@@ -159,6 +159,32 @@ test("wide console places a vertical graph below activity while the tree spans t
   assert.ok(lines.every((line) => visibleWidth(line) <= 140));
 });
 
+test("wide console divides activity and search shape evenly at different terminal heights", (t) => {
+  const state = new ReplayLiveState("task", 2);
+  iteration(state, 1);
+  const h = consoleHarness(state, t);
+
+  for (const finished of [false, true]) {
+    if (finished) state.finish();
+
+    for (const rows of [24, 25, 36, 60, 100]) {
+      h.resize(rows);
+      const lines = h.component.render(140);
+      const activityStart = lines.findIndex((line) => line.includes("CURRENT ACTIVITY"));
+      const shapeStart = lines.findIndex((line) => line.includes("SEARCH SHAPE"));
+      const divider = shapeStart - 1;
+      const activityHeight = divider - activityStart;
+      const shapeHeight = lines.length - 1 - shapeStart; // Exclude the shared footer.
+
+      assert.ok(activityStart >= 0 && shapeStart > activityStart);
+      assert.match(sliceByColumn(lines[divider], 65, 75), /^─+$/);
+      assert.ok(Math.abs(activityHeight - shapeHeight) <= 1,
+        `${rows} rows (${finished ? "finished" : "running"}): activity ${activityHeight}, shape ${shapeHeight}`);
+      assert.equal(lines.length, rows - 5);
+    }
+  }
+});
+
 test("narrow and short screens omit the graph before the readable lineage/activity", (t) => {
   const state = new ReplayLiveState("task", 2);
   iteration(state, 1);

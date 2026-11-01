@@ -144,8 +144,9 @@ export class ReplayLiveConsole implements Component {
       const rightWidth = width - leftWidth - 2;
       let rightPane = right;
       if (available >= 14 && rightWidth >= 32) {
-        const graphHeight = Math.min(16, Math.floor(available * 0.6));
-        const activityHeight = available - graphHeight - 2;
+        // Split evenly around the divider; the lower pane includes its heading.
+        const activityHeight = Math.floor((available - 1) / 2);
+        const graphHeight = available - activityHeight - 2;
         const shape = this.getShape(lineage, rightWidth, graphHeight);
         const activity = Array.from({ length: activityHeight }, (_, index) => right[index] ?? "");
         const graph = renderSearchShape(shape, lineage, {
