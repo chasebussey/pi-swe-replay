@@ -17,6 +17,11 @@ export interface LiveTool {
   startedAt: number;
 }
 
+export interface LiveActivity {
+  text: string;
+  kind: "info" | "tool-started" | "tool-succeeded" | "tool-failed";
+}
+
 export interface LiveReplaySnapshot {
   prompt: string;
   requestedCount: number;
@@ -28,7 +33,7 @@ export interface LiveReplaySnapshot {
   iteration: number;
   iterations: readonly LiveIteration[];
   baseline?: "passed" | "failed" | "inconclusive";
-  activity: readonly string[];
+  activity: readonly LiveActivity[];
   tools: readonly LiveTool[];
   waitingForInput: number;
   error?: string;
@@ -84,20 +89,22 @@ export class ReplayLiveState {
     }
   }
 
-  activity(text: string): void {
+  activity(text: string, kind: LiveActivity["kind"] = "info"): void {
     if (this.value.status !== "running") return;
-    this.update({ activity: [...this.value.activity.slice(-79), text.slice(0, 1000)] });
+    const entry: LiveActivity = { text: text.slice(0, 1000), kind };
+    this.update({ activity: [...this.value.activity.slice(-79), entry] });
   }
 
   startTool(tool: LiveTool): void {
     this.update({ tools: [...this.value.tools.filter((row) => row.id !== tool.id), tool] });
-    this.activity(`${tool.name} · ${tool.summary}`);
+    this.activity(`${tool.name} · ${tool.summary}`, "tool-started");
   }
 
   endTool(id: string, failed: boolean): void {
     const tool = this.value.tools.find((row) => row.id === id);
     this.update({ tools: this.value.tools.filter((row) => row.id !== id) });
-    if (tool) this.activity(`${failed ? "Tool failed" : "Tool finished"}: ${tool.name} · ${tool.summary}`);
+    if (tool) this.activity(`${failed ? "Tool failed" : "Tool finished"}: ${tool.name} · ${tool.summary}`,
+      failed ? "tool-failed" : "tool-succeeded");
   }
 
   inputPrompt(delta: 1 | -1): void {

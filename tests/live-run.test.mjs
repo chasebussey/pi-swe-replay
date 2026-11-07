@@ -23,12 +23,12 @@ function iteration(state, number, approach = "explore") {
   state.report({ type: "iteration", iteration: number, approach });
 }
 
-function consoleHarness(state, t) {
+function consoleHarness(state, t, consoleTheme = theme) {
   let height = 30;
   let closed = 0;
   let inspected = 0;
   let interrupted = 0;
-  const component = new ReplayLiveConsole(state, theme, keys, () => {}, () => { closed++; }, () => height,
+  const component = new ReplayLiveConsole(state, consoleTheme, keys, () => {}, () => { closed++; }, () => height,
     () => { inspected++; }, () => { interrupted++; });
   t.after(() => component.dispose());
   return { component, resize: (value) => { height = value; }, closed: () => closed, inspected: () => inspected, interrupted: () => interrupted };
@@ -47,7 +47,9 @@ test("live state separates capture from regression and bounds activity without l
   assert.equal(state.get().iterations[0].regression, "passed");
   for (let i = 0; i < 200; i++) state.activity(`event ${i}`);
   assert.equal(state.get().activity.length, 80);
-  assert.equal(state.get().activity.at(-1), "event 199");
+  assert.deepEqual(state.get().activity.at(-1), { text: "event 199", kind: "info" });
+  state.activity("x".repeat(1100));
+  assert.equal(state.get().activity.at(-1).text.length, 1000);
 
   state.startTool({ id: "1", name: "read", summary: "a", startedAt: 0 });
   state.startTool({ id: "2", name: "bash", summary: "test", startedAt: 0 });
@@ -55,8 +57,80 @@ test("live state separates capture from regression and bounds activity without l
   state.endTool("1", false);
   assert.deepEqual(state.get().tools.map((tool) => tool.id), ["2"]);
   state.endTool("2", true);
-  assert.match(state.get().activity.at(-1), /Tool failed/);
+  assert.deepEqual(state.get().activity.at(-1), { text: "Tool failed: bash · test", kind: "tool-failed" });
   assert.equal(state.get().tools.length, 0);
+});
+
+test("activity metadata preserves tool meaning without interpreting message text", () => {
+  const state = new ReplayLiveState("task", 1);
+  state.startTool({ id: "1", name: "read", summary: "failed.txt", startedAt: 0 });
+  assert.deepEqual(state.get().activity.at(-1), { text: "read · failed.txt", kind: "tool-started" });
+  state.endTool("1", false);
+  assert.deepEqual(state.get().activity.at(-1), { text: "Tool finished: read · failed.txt", kind: "tool-succeeded" });
+  state.activity("failed passed warning");
+  assert.equal(state.get().activity.at(-1).kind, "info");
+  state.finish();
+  const settled = state.get().activity;
+  state.activity("not recorded", "tool-failed");
+  assert.equal(state.get().activity, settled);
+});
+
+test("activity colors survive sanitization without changing layout or leaking into adjacent panes", (t) => {
+  t.mock.method(Date, "now", () => 1000);
+  const calls = [];
+  const colors = { accent: 36, success: 32, warning: 33, error: 31, muted: 90 };
+  const coloredTheme = { fg: (token, text) => {
+    calls.push({ token, text });
+    return `\x1b[${colors[token] ?? 37}m${text}\x1b[39m`;
+  } };
+  const strip = (text) => text.replace(/\x1b\[[0-9;]*m/g, "");
+  const state = new ReplayLiveState("task", 2);
+  iteration(state, 1);
+  state.startTool({ id: "1", name: "read", summary: "bad\x1b[31m\npath", startedAt: 0 });
+  state.endTool("1", false);
+  state.startTool({ id: "2", name: "bash", summary: "test", startedAt: 0 });
+  state.endTool("2", true);
+  state.activity("failed passed warning");
+  state.startTool({ id: "3", name: "read", summary: "active", startedAt: 0 });
+  const colored = consoleHarness(state, t, coloredTheme);
+  const plain = consoleHarness(state, t);
+
+  const compare = () => {
+    for (const rows of [18, 24, 60]) {
+      colored.resize(rows);
+      plain.resize(rows);
+      for (const width of [40, 100, 110, 140]) {
+        const actual = colored.component.render(width);
+        assert.deepEqual(actual.map(strip), plain.component.render(width).map(strip));
+        assert.ok(actual.every((text) => visibleWidth(text) <= width));
+        assert.ok(actual.every((text) => !strip(text).includes("\x1b")));
+        // Right-pane color begins after the shared vertical divider, never on the left.
+        for (const text of actual.filter((text) => text.includes("│"))) {
+          assert.ok(!text.slice(0, text.indexOf("│")).replaceAll("\x1b[0m", "").includes("\x1b"));
+        }
+      }
+    }
+  };
+  compare();
+  assert.ok(calls.some(({ token, text }) => token === "accent" && text === "Phase: PREPARING"));
+  assert.ok(calls.some(({ token, text }) => token === "success" && text === "Tool finished: read · bad?[31m path"));
+  assert.ok(calls.some(({ token, text }) => token === "error" && text === "Tool failed: bash · test"));
+  assert.ok(!calls.some(({ text }) => text === "failed passed warning"));
+  state.inputPrompt(1);
+  compare();
+  assert.ok(calls.some(({ token, text }) => token === "warning" && text.startsWith("Awaiting an extension dialog")));
+
+  colored.component.handleInput("\x1b[A");
+  plain.component.handleInput("\x1b[A");
+  for (const [status, token] of [["passed", "success"], ["failed", "error"], ["inconclusive", "warning"]]) {
+    state.report({ type: "evaluation", iteration: 1, status });
+    compare();
+    assert.ok(calls.some((call) => call.token === token && call.text.startsWith(`#1 explore · ${status.toUpperCase()}`)));
+  }
+  state.finish({ overview: { headline: "Winner selected · restoration failed", groups: [], notes: ["warning passed"], iterations: [] } }, "bad\x1b[31m");
+  compare();
+  assert.ok(calls.some(({ token, text }) => token === "error" && text === "Execution failed: bad?[31m"));
+  assert.ok(!calls.some(({ text }) => text === "Winner selected · restoration failed" || text === "warning passed"));
 });
 
 test("subscriber errors cannot determine execution outcome and unsubscribe is idempotent", () => {

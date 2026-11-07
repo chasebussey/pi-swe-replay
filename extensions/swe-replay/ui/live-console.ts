@@ -1,13 +1,30 @@
 import type { ExtensionCommandContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { Component } from "@earendil-works/pi-tui";
-import { ReplayLiveState, type LiveIteration, type LiveReplaySnapshot } from "../live-state";
+import { ReplayLiveState, type LiveActivity, type LiveIteration, type LiveReplaySnapshot } from "../live-state";
 import { safeDisplay } from "./dashboard";
 import { buildIterationLineage, type IterationLineage } from "./iteration-lineage";
 import { layoutSearchShape, renderSearchShape, type SearchShape } from "./search-shape";
 
 const line = (text: string) => safeDisplay(text).replace(/\n/g, " ");
 const elapsed = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+
+type ActivityTone = "normal" | "accent" | "success" | "warning" | "error" | "muted";
+interface ActivityRow { text: string; tone: ActivityTone }
+
+const activityRow = (text: string, tone: ActivityTone = "normal"): ActivityRow => ({ text, tone });
+const activityTones: Record<LiveActivity["kind"], ActivityTone> = {
+  info: "normal", "tool-started": "accent", "tool-succeeded": "success", "tool-failed": "error",
+};
+
+function regressionTone(status: LiveIteration["regression"]): ActivityTone {
+  switch (status) {
+    case "passed": return "success";
+    case "failed": return "error";
+    case "inconclusive": return "warning";
+    default: return "normal";
+  }
+}
 
 export function liveStatus(state: LiveReplaySnapshot): string {
   if (state.status !== "running") return state.status.toUpperCase();
@@ -136,7 +153,11 @@ export class ReplayLiveConsole implements Component {
       return `${marker}${prefix}${iterationLabel(byIteration.get(node.iteration)!, true)}`;
     });
     const left = ["ITERATION LINEAGE", `◆ Replay root${start ? ` · ↑ ${start} above` : ""}`, ...iterations];
-    const right = ["CURRENT ACTIVITY / OUTCOME", ...details].map(line);
+    // Sanitize raw content before adding trusted theme escapes, never afterwards.
+    const right = [activityRow("CURRENT ACTIVITY / OUTCOME"), ...details].map(({ text, tone }) => {
+      const sanitized = line(text);
+      return tone === "normal" ? sanitized : this.theme.fg(tone, sanitized);
+    });
     const body: string[] = [];
 
     if (width >= 110) {
@@ -164,7 +185,7 @@ export class ReplayLiveConsole implements Component {
     } else {
       // Stack the tree above activity on narrow screens; omit the decorative graph first.
       if (lineageHeight > 0) body.push(...left.slice(0, lineageHeight).map(line), "─".repeat(width), ...right);
-      else body.push(...[...(row ? [iterationLabel(row)] : []), ...right].map(line));
+      else body.push(...(row ? [line(iterationLabel(row))] : []), ...right);
     }
     return [...header, ...body.slice(0, available), footer].slice(0, height)
       .map((text) => truncateToWidth(text, width));
@@ -186,26 +207,33 @@ export class ReplayLiveConsole implements Component {
     return this.graph!.shape;
   }
 
-  private details(state: LiveReplaySnapshot, row?: LiveIteration): string[] {
+  private details(state: LiveReplaySnapshot, row?: LiveIteration): ActivityRow[] {
     if (state.status !== "running") {
       const overview = state.result?.overview;
       return [
-        ...(state.error ? [`Execution failed: ${state.error}`] : []),
-        overview?.headline ?? "Captured outcome unavailable; inspect session evidence.",
-        ...(overview?.groups.map((group) => `${group.label}: ${group.votes} votes · representative #${group.representativeIteration}${group.selected ? " · selected" : ""}`) ?? []),
-        ...(overview?.notes ?? []),
-        "Regression passing is not proof of task correctness.",
+        ...(state.error ? [activityRow(`Execution failed: ${state.error}`, "error")] : []),
+        activityRow(overview?.headline ?? "Captured outcome unavailable; inspect session evidence."),
+        ...(overview?.groups.map((group) => activityRow(`${group.label}: ${group.votes} votes · representative #${group.representativeIteration}${group.selected ? " · selected" : ""}`)) ?? []),
+        ...(overview?.notes.map((note) => activityRow(note)) ?? []),
+        activityRow("Regression passing is not proof of task correctness.", "muted"),
       ];
     }
     if (!this.follow && row) {
-      return [iterationLabel(row), row.approach === "exploit" ? `Replaced step: ${row.targetStepId ?? "unavailable"}` : "Started from replay root.",
-        "d opens captured trajectories, decisions and regression evidence.", "Live activity continues without moving your selection."];
+      return [
+        activityRow(iterationLabel(row), regressionTone(row.regression)),
+        activityRow(row.approach === "exploit" ? `Replaced step: ${row.targetStepId ?? "unavailable"}` : "Started from replay root."),
+        activityRow("d opens captured trajectories, decisions and regression evidence.", "muted"),
+        activityRow("Live activity continues without moving your selection.", "muted"),
+      ];
     }
     return [
-      state.waitingForInput ? "Awaiting an extension dialog; answer it above this console." : `Phase: ${liveStatus(state)}`,
-      ...state.tools.slice(0, 5).map((tool) => `${tool.name} ${tool.summary} · ${elapsed(Date.now() - tool.startedAt)}`),
-      ...(state.tools.length > 5 ? [`+ ${state.tools.length - 5} other active tools`] : []),
-      "Recent activity", ...state.activity.slice(-8).reverse(),
+      state.waitingForInput
+        ? activityRow("Awaiting an extension dialog; answer it above this console.", "warning")
+        : activityRow(`Phase: ${liveStatus(state)}`, "accent"),
+      ...state.tools.slice(0, 5).map((tool) => activityRow(`${tool.name} ${tool.summary} · ${elapsed(Date.now() - tool.startedAt)}`, "accent")),
+      ...(state.tools.length > 5 ? [activityRow(`+ ${state.tools.length - 5} other active tools`)] : []),
+      activityRow("Recent activity"),
+      ...state.activity.slice(-8).reverse().map((entry) => activityRow(entry.text, activityTones[entry.kind])),
     ];
   }
 
