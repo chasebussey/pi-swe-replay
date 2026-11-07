@@ -95,6 +95,10 @@ above activity and omit the graph; very short screens favor current activity.
 | `a` (foreground), Escape (compact mode) | Interrupt an active agent turn using Pi's existing abort API |
 | Enter / Escape (finished) | Dismiss the result and return to ordinary chat |
 
+The expanded console fills the terminal with a full-screen overlay, including
+blank padding on narrow screens. Escape collapses it to a bottom-aligned strip
+for transcript inspection.
+
 The compact strip deliberately **does not expose the normal chat editor**. While
 replay owns the workspace, unrelated prompts, user shell commands, and conflicting
 session navigation/switch/fork/manual-compaction operations are blocked. Use `v` to
@@ -105,10 +109,11 @@ the workspace, or external edits concurrently; these guards are not a security s
 Inspection selection remains stable as new iterations arrive. The dashboard opened
 with `d` is a captured snapshot, not a second live feed; reopen it to refresh.
 Tool arguments are abbreviated, output/reasoning is not streamed into the default
-view, and regression evidence stays outside model context. Native approval/input
-dialogs take focus above the console. Pi reports only the outermost UI prompt, so
-nested dialogs are answerable but do not reliably produce a separate “awaiting input”
-status in the underlying console.
+view, and regression evidence stays outside model context. The console temporarily
+hides while its own recorded-details dashboard is open. Third-party approval/input
+dialogs during replay are a known limitation: the overlay may obscure them or
+retain focus. Pi does not ship with approval dialogs by default; extensions that
+require interactive dialogs during replay are not supported.
 
 There is **no new whole-run Stop or pause/resume control**. Agent interruption is
 not cancellation of disposable evaluation, normalization, or a Git restoration.

@@ -5,7 +5,7 @@ import { sliceByColumn, visibleWidth } from "@earendil-works/pi-tui";
 
 const jiti = createJiti(import.meta.url, { fsCache: false });
 const { ReplayLiveState } = await jiti.import("../extensions/swe-replay/live-state.ts");
-const { ReplayLiveConsole } = await jiti.import("../extensions/swe-replay/ui/live-console.ts");
+const { ReplayLiveConsole, openLiveConsole } = await jiti.import("../extensions/swe-replay/ui/live-console.ts");
 const { ReplayRunController } = await jiti.import("../extensions/swe-replay/run-controller.ts");
 const theme = { fg: (_token, text) => text };
 const bindings = {
@@ -33,6 +33,46 @@ function consoleHarness(state, t, consoleTheme = theme) {
   t.after(() => component.dispose());
   return { component, resize: (value) => { height = value; }, closed: () => closed, inspected: () => inspected, interrupted: () => interrupted };
 }
+
+test("live console uses a full-screen overlay and yields to recorded details", async (t) => {
+  const state = new ReplayLiveState("task", 1);
+  const details = deferred();
+  const hidden = [];
+  let component;
+  let options;
+  let finish;
+  const ctx = {
+    ui: {
+      custom(factory, suppliedOptions) {
+        options = suppliedOptions;
+        const settled = new Promise((resolve) => { finish = resolve; });
+        component = factory({ requestRender() {}, terminal: { rows: 24 } }, theme, keys, finish);
+        options.onHandle({ setHidden(value) { hidden.push(value); } });
+        return settled;
+      },
+    },
+  };
+  const screen = openLiveConsole(ctx, state, () => details.promise);
+  t.after(() => { component.dispose(); screen.close(); });
+  assert.equal(options.overlay, true);
+  assert.deepEqual(options.overlayOptions, { anchor: "bottom-left", width: "100%", maxHeight: "100%", margin: 0 });
+  assert.equal(component.render(80).length, 24);
+  assert.match(component.render(80).at(-1), /Esc hide/);
+
+  component.handleInput("d");
+  assert.deepEqual(hidden, [true]);
+  await tick();
+  details.resolve();
+  await tick();
+  assert.deepEqual(hidden, [true, false]);
+
+  component.handleInput("\x1b");
+  assert.equal(component.render(80).length, 2);
+  screen.reveal();
+  assert.equal(component.render(80).length, 24);
+  screen.close();
+  await screen.settled;
+});
 
 test("live state separates capture from regression and bounds activity without leaking output", () => {
   const state = new ReplayLiveState("task", 2);
@@ -201,11 +241,11 @@ test("live layout fits terminal size and sanitizes untrusted paths/messages", (t
   state.startTool({ id: "tool", name: "read", summary: "\x1b]8;;file://bad\x07工程.ts", startedAt: Date.now() });
   state.inputPrompt(1);
   const h = consoleHarness(state, t);
-  for (const rows of [6, 10, 24, 60]) {
+  for (const rows of [1, 3, 6, 10, 24, 60]) {
     h.resize(rows);
     for (const width of [1, 12, 40, 109, 110, 160]) {
       const lines = h.component.render(width);
-      assert.ok(lines.length <= Math.max(1, rows - 5));
+      assert.equal(lines.length, rows);
       assert.ok(lines.every((line) => visibleWidth(line) <= width));
       assert.ok(lines.every((line) => !line.replaceAll("\x1b[0m", "").includes("\x1b") && !line.includes("\x07")));
     }
@@ -254,7 +294,7 @@ test("wide console divides activity and search shape evenly at different termina
       assert.match(sliceByColumn(lines[divider], 65, 75), /^─+$/);
       assert.ok(Math.abs(activityHeight - shapeHeight) <= 1,
         `${rows} rows (${finished ? "finished" : "running"}): activity ${activityHeight}, shape ${shapeHeight}`);
-      assert.equal(lines.length, rows - 5);
+      assert.equal(lines.length, rows);
     }
   }
 });

@@ -1,6 +1,6 @@
 import type { ExtensionCommandContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { Component } from "@earendil-works/pi-tui";
+import type { Component, OverlayHandle } from "@earendil-works/pi-tui";
 import { ReplayLiveState, type LiveActivity, type LiveIteration, type LiveReplaySnapshot } from "../live-state";
 import { safeDisplay } from "./dashboard";
 import { buildIterationLineage, type IterationLineage } from "./iteration-lineage";
@@ -112,7 +112,7 @@ export class ReplayLiveConsole implements Component {
   render(width: number): string[] {
     if (width <= 0) return [];
     const state = this.state.get();
-    const height = Math.max(1, this.rows() - 5);
+    const height = Math.max(1, this.rows());
     const duration = elapsed((state.endedAt ?? Date.now()) - state.startedAt);
     const status = liveStatus(state);
     if (this.compact) {
@@ -187,8 +187,11 @@ export class ReplayLiveConsole implements Component {
       if (lineageHeight > 0) body.push(...left.slice(0, lineageHeight).map(line), "─".repeat(width), ...right);
       else body.push(...(row ? [line(iterationLabel(row))] : []), ...right);
     }
-    return [...header, ...body.slice(0, available), footer].slice(0, height)
-      .map((text) => truncateToWidth(text, width));
+    const lines = [...header, ...body.slice(0, available)];
+    const contentHeight = Math.max(0, height - 1);
+    const padded = Array.from({ length: contentHeight }, (_, index) => lines[index] ?? "");
+
+    return [...padded, footer].map((text) => truncateToWidth(text, width));
   }
 
   private getLineage(state: LiveReplaySnapshot): IterationLineage {
@@ -247,22 +250,34 @@ export class ReplayLiveConsole implements Component {
   }
 }
 
-export function openLiveConsole(ctx: ExtensionCommandContext, state: ReplayLiveState, inspect: () => void): { close(): void; reveal(): void; settled: Promise<void> } {
+export function openLiveConsole(ctx: ExtensionCommandContext, state: ReplayLiveState, inspect: () => void | Promise<void>): { close(): void; reveal(): void; settled: Promise<void> } {
   let done: (() => void) | undefined;
   let closed = false;
   let component: ReplayLiveConsole | undefined;
+  let overlay: OverlayHandle | undefined;
+  const inspectDetails = () => {
+    overlay?.setHidden(true);
+    void Promise.resolve().then(inspect).finally(() => {
+      if (!closed) overlay?.setHidden(false);
+    });
+  };
   const close = () => {
     closed = true;
     done?.();
   };
   const settled = ctx.ui.custom<void>((tui, theme, keys, finish) => {
     done = () => finish();
-    component = new ReplayLiveConsole(state, theme, keys, () => tui.requestRender(), close, () => tui.terminal.rows, inspect, () => {
+    component = new ReplayLiveConsole(state, theme, keys, () => tui.requestRender(), close, () => tui.terminal.rows, inspectDetails, () => {
       if (!ctx.isIdle()) ctx.abort();
       else state.activity("No active agent turn to interrupt. Evaluation/finalization is not cancelled by this action.");
     });
     if (closed) { component.dispose(); finish(); }
     return component;
+  }, {
+    overlay: true,
+    // Full-height when expanded; the compact strip stays at the bottom.
+    overlayOptions: { anchor: "bottom-left", width: "100%", maxHeight: "100%", margin: 0 },
+    onHandle: (handle) => { overlay = handle; },
   });
   return { close, reveal: () => component?.reveal(), settled };
 }

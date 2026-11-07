@@ -60,11 +60,16 @@ export class ReplayRunController {
       if (!valid) return;
       try { ctx.ui.notify(safeDisplay(message), kind); } catch { /* terminal failure must not change execution */ }
     };
-    const inspect = () => {
+    const inspect = async () => {
       if (inspecting || !valid) return;
       inspecting = true;
-      void showReplayView(ctx).catch((error) => notify(`Replay inspection unavailable: ${String(error)}`, "warning"))
-        .finally(() => { inspecting = false; });
+      try {
+        await showReplayView(ctx);
+      } catch (error) {
+        notify(`Replay inspection unavailable: ${String(error)}`, "warning");
+      } finally {
+        inspecting = false;
+      }
     };
     const open = () => {
       if (!valid) return;
@@ -161,8 +166,8 @@ export class ReplayRunController {
       state.startTool({ id: event.toolCallId, name: event.toolName, summary: toolSummary(event.args), startedAt: Date.now() });
     }));
     cleanup.push(this.pi.on("tool_execution_end", (event) => state.endTool(event.toolCallId, event.isError)));
-    // Pi reports only the outermost UI prompt. Nested approvals still stack/focus
-    // correctly, but cannot reliably be marked as awaiting input while our custom UI is open.
+    // Pi reports only the outermost UI prompt. Third-party dialogs may be
+    // obscured by the full-screen overlay; they are not supported during replay.
     cleanup.push(this.pi.on("ui_prompt_start", (event) => { if (event.kind !== "custom") state.inputPrompt(1); }));
     cleanup.push(this.pi.on("ui_prompt_end", (event) => { if (event.kind !== "custom") state.inputPrompt(-1); }));
 

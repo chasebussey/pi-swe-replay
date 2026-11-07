@@ -216,6 +216,28 @@ failing bug-reproduction test separate and use it afterward to assess task succe
 Ignored dependencies are not copied into worktrees; include needed setup. Node
 tests use bundled Pyodide without host Python or runtime network access.
 
+### UI verification
+
+For UI changes, run the type check and relevant component tests, then attempt a
+focused smoke check in real Pi using available terminal-control/screen-inspection
+tools. Use a disposable repository/session and the extension's absolute path;
+never run workspace-restoring replay against real work just to check appearance.
+Do not build a harness or add testing dependencies as an incidental requirement.
+
+Check the affected behavior: opening and viewport coverage, narrow/wide layouts
+and resizing, Escape collapse / `v` reopen, `d` details and return focus, and
+completion/dismissal. Inspect the visible screen when tools allow it; component
+output or raw ANSI output alone does not establish the rendered appearance.
+If screen inspection or interaction is unavailable, ask the user for a targeted
+visual check and report that part as unverified. Agree on a small usage budget
+before initiating provider-backed replay solely for validation.
+
+Report automated checks separately from observed terminal behavior and
+provider-backed end-to-end behavior. Include Pi version, terminal dimensions,
+scenarios actually exercised, evidence available, and remaining limitations.
+Do not claim live validation from passing component tests. A possible future
+skill is outlined in `docs/ui-verification-skill-proposal.md` (local, Git-ignored).
+
 ## Implementation conventions
 
 - Follow existing TypeScript style: two-space indentation, double quotes, named
