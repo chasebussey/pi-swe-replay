@@ -1,0 +1,1424 @@
+[
+  {
+    "id": "original:py-formatting",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n    def calculate( self, value ):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value>0:\n            result=value+1\n            return result\n        return 0\nasync def ready( ):\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "d5df746207c163ea7e25840304cb519e2155f9729d8fbdb33e5e9f76f8481216"
+    },
+    "expected": "equivalent",
+    "rationale": "Only incidental spacing and blank lines change.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-formatting"
+    }
+  },
+  {
+    "id": "original:py-comments",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # A different explanation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "51f8c445d354910637e57c2a192f913ffbeeda1ae29cffe559ee71a1bc24cede"
+    },
+    "expected": "equivalent",
+    "rationale": "Only a comment changes; all docstrings remain identical.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-comments"
+    }
+  },
+  {
+    "id": "original:py-docstrings",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"\"\"Changed module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Changed class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Changed function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Changed async function documentation.\"\"\"\n    return True\n",
+      "sha256": "9e07ed1c3db9131a7e60cccba828f5953917c1f24e907f84f1234f2f4ad09216"
+    },
+    "expected": "equivalent",
+    "rationale": "Module, class, function, and async-function docstring text changes; the comment is unchanged.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-docstrings"
+    }
+  },
+  {
+    "id": "original:py-documentation-removal",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "# Module documentation replaced with a comment.\n\n\nclass Calculator:\n    def calculate(self, value):\n        # Different explanation; all docstrings have been removed.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    return True\n",
+      "sha256": "e74b8792009faa060767c4647748a867802d4b06393581e324203bd9ee9ea538"
+    },
+    "expected": "equivalent",
+    "rationale": "Remove all docstring statements and change comments without changing retained program structure.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-documentation-removal"
+    }
+  },
+  {
+    "id": "original:py-equivalent-triple",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n    def calculate( self, value ):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value>0:\n            result=value+1\n            return result\n        return 0\nasync def ready( ):\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "d5df746207c163ea7e25840304cb519e2155f9729d8fbdb33e5e9f76f8481216"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "# Module documentation replaced with a comment.\n\n\nclass Calculator:\n    def calculate(self, value):\n        # Different explanation; all docstrings have been removed.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    return True\n",
+      "sha256": "e74b8792009faa060767c4647748a867802d4b06393581e324203bd9ee9ea538"
+    },
+    "expected": "equivalent",
+    "rationale": "Closes the base/formatting/documentation equivalence triple.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-equivalent-triple"
+    }
+  },
+  {
+    "id": "original:py-operator",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value - 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "2a5590a892508cf9b88ef47b0ee1100a3c58b8c8f5f327e0c8c074754f201023"
+    },
+    "expected": "different",
+    "rationale": "Addition becomes subtraction; meaningful anonymous tokens must be retained.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-operator"
+    }
+  },
+  {
+    "id": "original:py-nesting",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n            return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"\"\"Module documentation.\"\"\"\n\n\nclass Calculator:\n    \"\"\"Class documentation.\"\"\"\n\n    def calculate(self, value):\n        \"\"\"Function documentation.\"\"\"\n        # Explain the calculation.\n        if value > 0:\n            result = value + 1\n        return result\n        return 0\n\n\nasync def ready():\n    \"\"\"Async function documentation.\"\"\"\n    return True\n",
+      "sha256": "05ad40514db1d99df6270abca1ee6a3b221c41a3f9f7fd28ad3f3a9fc1a4b988"
+    },
+    "expected": "different",
+    "rationale": "The same visible tokens have a different block structure because a return is dedented.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-nesting"
+    }
+  },
+  {
+    "id": "original:py-ordinary-string-expression",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 16\n",
+      "sha256": "46cb6e209a6398deb0c5cecb75faf69a1b29d265620404353f9f69ce1a8a5031"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"changed ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 16\n",
+      "sha256": "4dfdec0b79997d16fd3976fa8a8d687d1fc84b9439e406941b74c3ec052f6763"
+    },
+    "expected": "different",
+    "rationale": "A non-docstring expression changes; filtering every string expression would be too broad.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-ordinary-string-expression"
+    }
+  },
+  {
+    "id": "original:py-comment-marker-in-string",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 16\n",
+      "sha256": "46cb6e209a6398deb0c5cecb75faf69a1b29d265620404353f9f69ce1a8a5031"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# changed string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 16\n",
+      "sha256": "bd134c06053b74f4aab2e7a1013d039069c5d8729a27ec64034d5416aa271439"
+    },
+    "expected": "different",
+    "rationale": "A hash-prefixed string value changes; it is not a removable comment.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-comment-marker-in-string"
+    }
+  },
+  {
+    "id": "original:py-literal-spelling",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 16\n",
+      "sha256": "46cb6e209a6398deb0c5cecb75faf69a1b29d265620404353f9f69ce1a8a5031"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 0x10\n",
+      "sha256": "f0e9cb7176fa5534b252a35155c7d76592a38d96d0cd0bd06958225ae23fae21"
+    },
+    "expected": "different",
+    "rationale": "16 becomes 0x10. This initial policy preserves literal spelling despite equal numeric value.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-literal-spelling"
+    }
+  },
+  {
+    "id": "original:py-identifier",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return value\n\n\ncount = 16\n",
+      "sha256": "46cb6e209a6398deb0c5cecb75faf69a1b29d265620404353f9f69ce1a8a5031"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def message():\n    \"\"\"A real docstring.\"\"\"\n    value = \"# this is string content, not a comment\"\n    \"ordinary string expression, not a docstring\"\n    return other_value\n\n\ncount = 16\n",
+      "sha256": "5546ab7686a87993cfbbfc53a518a70dc70fc9e504a36191e63d2fee1ac351ef"
+    },
+    "expected": "different",
+    "rationale": "The returned identifier changes; node kinds alone cannot define equality.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-identifier"
+    }
+  },
+  {
+    "id": "original:py-statement-order",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def process():\n    validate()\n    save()\n",
+      "sha256": "20bdbbb32a1f6d8d63efa3c9c947ba9dffacbb85baf55ddc404c199c175815cf"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def process():\n    save()\n    validate()\n",
+      "sha256": "542511879ea44d39804fd988941ab21a54d8504025aa65de13a6d48ae70a5a7d"
+    },
+    "expected": "different",
+    "rationale": "Validation and persistence calls exchange order.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-statement-order"
+    }
+  },
+  {
+    "id": "original:py-parse-error",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def process():\n    validate()\n    save()\n",
+      "sha256": "20bdbbb32a1f6d8d63efa3c9c947ba9dffacbb85baf55ddc404c199c175815cf"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def process(:\n    validate()\n    save()\n",
+      "sha256": "523848f9aece41da2f4996658fbc908e3b90974ce1cfa1fe7c2d1e7e8ceae270"
+    },
+    "expected": "fallback-required",
+    "rationale": "Malformed function header must not be trusted as a recovered structural identity; original bytes differ.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "py-parse-error"
+    }
+  },
+  {
+    "id": "original:ts-formatting",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate(value: number): number {\n  // Explain the calculation.\n  if (value > 0) {\n    const result = value + 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "11ca764718487d96e17b52d90270a637b4fd7960b48c52bcccd82f8706c6d965"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate( value : number ) : number\n{\n    // Explain the calculation.\n    if(value>0){const result=value+1;return result;}\n    return 0;\n}\n",
+      "sha256": "e3a39936f9763e668e0f1967a5582166461fae939ecd81b844aeee866e71d721"
+    },
+    "expected": "equivalent",
+    "rationale": "Only incidental layout changes; semicolons and meaningful syntax are retained.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-formatting"
+    }
+  },
+  {
+    "id": "original:ts-documentation",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate(value: number): number {\n  // Explain the calculation.\n  if (value > 0) {\n    const result = value + 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "11ca764718487d96e17b52d90270a637b4fd7960b48c52bcccd82f8706c6d965"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "// Replaced the documentation and removed the body comment.\nexport function calculate(value: number): number {\n  if (value > 0) {\n    const result = value + 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "facd659901ad7fe24d45d6c0e77fd4231eb62fdc44c63d6d19cc6fc155ae56eb"
+    },
+    "expected": "equivalent",
+    "rationale": "JSDoc and ordinary comments change or disappear.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-documentation"
+    }
+  },
+  {
+    "id": "original:ts-equivalent-triple",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate( value : number ) : number\n{\n    // Explain the calculation.\n    if(value>0){const result=value+1;return result;}\n    return 0;\n}\n",
+      "sha256": "e3a39936f9763e668e0f1967a5582166461fae939ecd81b844aeee866e71d721"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "// Replaced the documentation and removed the body comment.\nexport function calculate(value: number): number {\n  if (value > 0) {\n    const result = value + 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "facd659901ad7fe24d45d6c0e77fd4231eb62fdc44c63d6d19cc6fc155ae56eb"
+    },
+    "expected": "equivalent",
+    "rationale": "Closes the base/formatting/documentation equivalence triple.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-equivalent-triple"
+    }
+  },
+  {
+    "id": "original:ts-operator",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate(value: number): number {\n  // Explain the calculation.\n  if (value > 0) {\n    const result = value + 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "11ca764718487d96e17b52d90270a637b4fd7960b48c52bcccd82f8706c6d965"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate(value: number): number {\n  // Explain the calculation.\n  if (value > 0) {\n    const result = value - 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "a0928a9bfd32e24f27be7d2c2764cca8f45f3460b46157ae67ab5f2962d0ba21"
+    },
+    "expected": "different",
+    "rationale": "Addition becomes subtraction.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-operator"
+    }
+  },
+  {
+    "id": "original:ts-nesting",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate(value: number): number {\n  // Explain the calculation.\n  if (value > 0) {\n    const result = value + 1;\n    return result;\n  }\n  return 0;\n}\n",
+      "sha256": "11ca764718487d96e17b52d90270a637b4fd7960b48c52bcccd82f8706c6d965"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "/** Calculator documentation. */\nexport function calculate(value: number): number {\n  // Explain the calculation.\n  if (value > 0) {\n    const result = value + 1;\n  }\n  return result;\n  return 0;\n}\n",
+      "sha256": "d25ce282f02226053b09150c18d89838e2a7828703fa14d9c93129289f9bea39"
+    },
+    "expected": "different",
+    "rationale": "A return leaves the conditional block; lexical identifier scope also changes.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-nesting"
+    }
+  },
+  {
+    "id": "original:ts-ordinary-string-expression",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "dd29c0cce6e874a7405070bf9a8f739cac20fe44d8fafe555b2b4e497d930914"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"changed ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "956c551c7545013fcce537deb75833e99b6bf07fcc24da42aa328f83904827e0"
+    },
+    "expected": "different",
+    "rationale": "An initial string expression in a TypeScript function is not a Python-style docstring.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-ordinary-string-expression"
+    }
+  },
+  {
+    "id": "original:ts-comment-marker-in-string",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "dd29c0cce6e874a7405070bf9a8f739cac20fe44d8fafe555b2b4e497d930914"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// changed string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "f5af811943f59921dffa0ef27e7760ee9079a0ec7f0c1267e9f18759851ce9c9"
+    },
+    "expected": "different",
+    "rationale": "Slash-prefixed string content changes; it is not a removable comment.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-comment-marker-in-string"
+    }
+  },
+  {
+    "id": "original:ts-literal-spelling",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "dd29c0cce6e874a7405070bf9a8f739cac20fe44d8fafe555b2b4e497d930914"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 0x10;\nexport const template = `hello world`;\n",
+      "sha256": "b705fc422e7b9c1a8bfc1fa46205aac5c6667955a78547875aa45a9faf7262c0"
+    },
+    "expected": "different",
+    "rationale": "16 becomes 0x10; literal-spelling normalization is not in the initial policy.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-literal-spelling"
+    }
+  },
+  {
+    "id": "original:ts-template-whitespace",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "dd29c0cce6e874a7405070bf9a8f739cac20fe44d8fafe555b2b4e497d930914"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello  world`;\n",
+      "sha256": "9f83d0f1181d5b443ad067a49dc15afb883e8bb6bfcf52973f0abf6c0c78509f"
+    },
+    "expected": "different",
+    "rationale": "Whitespace inside a template literal changes its value and must not be stripped.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-template-whitespace"
+    }
+  },
+  {
+    "id": "original:ts-identifier",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return value;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "dd29c0cce6e874a7405070bf9a8f739cac20fe44d8fafe555b2b4e497d930914"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function message(): string {\n  \"ordinary string expression, not a docstring\";\n  const value = \"// this is string content, not a comment\";\n  return otherValue;\n}\n\nexport const count = 16;\nexport const template = `hello world`;\n",
+      "sha256": "5dd6778e8775b6ee62df991b6a2b5378d8c7e7ce712e33d47fb1980285f1bbe8"
+    },
+    "expected": "different",
+    "rationale": "The returned identifier changes.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-identifier"
+    }
+  },
+  {
+    "id": "original:ts-statement-order",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function process(): void {\n  validate();\n  save();\n}\n",
+      "sha256": "fe21512eea2b9576a5dcc01a358e3bfbfa7e31d6bf0795fbd3915360eded8dd0"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function process(): void {\n  save();\n  validate();\n}\n",
+      "sha256": "df7fe8dff4f26a0ec88ae3deffaea917dbef992bb445e5c46abf924da62fb213"
+    },
+    "expected": "different",
+    "rationale": "Validation and persistence calls exchange order.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-statement-order"
+    }
+  },
+  {
+    "id": "original:ts-automatic-semicolon-insertion",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function result() {\n  return { value: 1 };\n}\n",
+      "sha256": "2261c43abaa31fac910e944ea90d88395309f88e970fc3c159d8061012c705a5"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function result() {\n  return\n  { value: 1 };\n}\n",
+      "sha256": "536ff0e61ecadd37e433ad83b220c698bb0eea773a957c5ef808bfa0b657eaac"
+    },
+    "expected": "different",
+    "rationale": "A newline after return changes the parse and returned result, despite matching visible tokens.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-automatic-semicolon-insertion"
+    }
+  },
+  {
+    "id": "original:ts-tooling-directive",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "// @ts-nocheck\nexport const count: number = \"not a number\";\n",
+      "sha256": "8234dead907617bdf0a400a03e1f8ca22e16770747fb39bcd3f6643b4323e7bf"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const count: number = \"not a number\";\n",
+      "sha256": "ed1a6cd70466f6b186b94e915f4fbb8d050d2214087b34a4186a9b35eecdba95"
+    },
+    "expected": "equivalent",
+    "rationale": "The chosen all-comments policy ignores ts-nocheck even though type-check behavior changes.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-tooling-directive"
+    }
+  },
+  {
+    "id": "original:ts-parse-error",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function process(): void {\n  validate();\n  save();\n}\n",
+      "sha256": "fe21512eea2b9576a5dcc01a358e3bfbfa7e31d6bf0795fbd3915360eded8dd0"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function process(: void {\n  validate();\n  save();\n}\n",
+      "sha256": "811ee459c05196540ed6d4c8e976e09c509a09f7887c7deaccbeb1df61ea56fd"
+    },
+    "expected": "fallback-required",
+    "rationale": "Malformed function header requires explicit fallback handling; original bytes differ.",
+    "origin": {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "id": "ts-parse-error"
+    }
+  },
+  {
+    "id": "supplemental:py-module-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"module A\"\nx = 1\n",
+      "sha256": "b0b456de8b6fff1d443141e7f7a6a61b9534117931a91e7fcb33679a9f37e5a3"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"module B\"\nx = 1\n",
+      "sha256": "96c7fc1dc7b4bc80545e1b39dfc01a8cfb25ca92a3fbf05532742b0c40625ce5"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-module-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-module-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-class-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "class A:\n    \"docs A\"\n    value = 1\n",
+      "sha256": "1292d5c3da2bfe697833451c60fffad4ae5b0225630ad2083fc86b086e563bec"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "class A:\n    \"docs B\"\n    value = 1\n",
+      "sha256": "99ae212afd395b518d8dd274dc428bd155bde1037b6863bf25447f67adfe0cfc"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-class-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-class-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-decorated-function-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "@decorate\ndef f():\n    \"docs A\"\n    return 1\n",
+      "sha256": "1c9854085e7de2dfc287dedf4fb74b33231fbb04c411ea46e6c5d7c2f36acd10"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "@decorate\ndef f():\n    \"docs B\"\n    return 1\n",
+      "sha256": "55e6a38d973cf59f0f7523c302bc26b33a8a603f2918b97487bf49ccad663617"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-decorated-function-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-decorated-function-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-async-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "async def f():\n    \"docs A\"\n    return 1\n",
+      "sha256": "e30e665692aa7d3d216ba84c988fdf8ca1dc7d5710c559d12f72a30428e3e0e9"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "async def f():\n    \"docs B\"\n    return 1\n",
+      "sha256": "905d0126e9c7be754ffff21ade7ef05c44afd66974a58b1f1438317caf814f68"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-async-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-async-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-docstring-only-body",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f():\n    \"docs A\"\n",
+      "sha256": "d65525fcdb650cf80e37a9805bcf9a52b52001628b3b836c69dd4ef7eab4a307"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f():\n    \"docs B\"\n",
+      "sha256": "9019e3acfd4673960bc149709a3c189c2ecd76ab617ef341d6303e4054b04134"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-docstring-only-body policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-docstring-only-body"
+    }
+  },
+  {
+    "id": "supplemental:py-parenthesized-adjacent-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f():\n    (\"docs \" \"A\")\n    return 1\n",
+      "sha256": "dd8a21a632adbb74d2d5d6e0e289e524983f9e2395952c357898b09b1d004361"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f():\n    r\"docs B\"\n    return 1\n",
+      "sha256": "76f9151c3a1c9e9368155d3883eddd85f220c99d62907b16c08da9fefaae81ef"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-parenthesized-adjacent-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-parenthesized-adjacent-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-bytes-not-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f():\n    b\"A\"\n    return 1\n",
+      "sha256": "67189bccd2c2d7a7c6b85efcaa1deea0a51a406121c4b2628d860c1055233a47"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f():\n    b\"B\"\n    return 1\n",
+      "sha256": "fcd15f5b978ac856c5cc77a0f40b5f483d7a43d3feaddf82ab44221317c5a3af"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-bytes-not-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-bytes-not-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-fstring-not-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f():\n    f\"A{x}\"\n    return 1\n",
+      "sha256": "3b7c245a55860903d389c81cf544c0013eb8dff5a5cf637763da2ee2aa32b166"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f():\n    f\"B{x}\"\n    return 1\n",
+      "sha256": "03ea4ed20b393282024ddf8e406724b650ce1f57256bc5fbfa7fa29d0de3dd93"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-fstring-not-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-fstring-not-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-second-string-expression",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "\"docs\"\n\"A\"\nx = 1\n",
+      "sha256": "9a98c0081f67dc68c97ca335d45e1fcb5b93cc664ead05fc61534716ffc45215"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"docs\"\n\"B\"\nx = 1\n",
+      "sha256": "a7d38f2b749022b32cc039bf9216c1317ac19170bbe55b1474ce5c824a73110c"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-second-string-expression policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-second-string-expression"
+    }
+  },
+  {
+    "id": "supplemental:py-quote-spelling",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = 'hello'\n",
+      "sha256": "c5c3f3a2b4ddc0bbdc7f5156370bb87962523a3d982417db71cffe1285b227a9"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = \"hello\"\n",
+      "sha256": "b954de589de8b6574f3cfcfd58d4e1bbce9da6d300cd0210b7f5c5646b290a95"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-quote-spelling policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-quote-spelling"
+    }
+  },
+  {
+    "id": "supplemental:py-redundant-parentheses",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = (1 + 2)\n",
+      "sha256": "91b0a2d1f396a4192d0519386ff2eea1068f46823d4ea24ab5de3cb652bcddb1"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = 1 + 2\n",
+      "sha256": "2b5abe2e6cb7bc37030b3797873a7432cc197209ead9f3e823b5c56e71ffbb8b"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-redundant-parentheses policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-redundant-parentheses"
+    }
+  },
+  {
+    "id": "supplemental:py-literal-blank-lines",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = \"\"\"a\n\nb\"\"\"\n",
+      "sha256": "635842ae10e8a8eb7f236b5641ad53b0bba5c3f62c8bd6cd209308031242aaf5"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = \"\"\"a\nb\"\"\"\n",
+      "sha256": "88a58aa6dd52ebde2844369ee61c3f8798f34ad6cae75a5159caa7676792d4ec"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-literal-blank-lines policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-literal-blank-lines"
+    }
+  },
+  {
+    "id": "supplemental:py-literal-trailing-space",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = \"\"\"a  \nb\"\"\"\n",
+      "sha256": "c52ea4568314815e134de7c10fd1fec807187842fea3edc2d39171ebcd306f20"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = \"\"\"a\nb\"\"\"\n",
+      "sha256": "88a58aa6dd52ebde2844369ee61c3f8798f34ad6cae75a5159caa7676792d4ec"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-literal-trailing-space policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-literal-trailing-space"
+    }
+  },
+  {
+    "id": "supplemental:py-unicode-formatting",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "café = '😀'\nx = café + 'é'\n",
+      "sha256": "f687d4529e5f5dc5984be756cc0b04e43af4daab5727186c230a98f0375f79a1"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "café='😀'\nx=café+'é'\n",
+      "sha256": "2480c26e58e1d05f0a016088a1953670598ddc5b8846712f41fda41a13700c89"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-unicode-formatting policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-unicode-formatting"
+    }
+  },
+  {
+    "id": "supplemental:py-missing-token-both",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f(:\n    pass\n",
+      "sha256": "3044fdb478dc9d4a8113b715662e07eaa24063ef53078adb64b39e6cabfa4eaf"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f( :\n    pass\n",
+      "sha256": "acc9aa25e9336912101436f5dc98b00a12dd911154e42dc634d952511f7f6737"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the py-missing-token-both policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-missing-token-both"
+    }
+  },
+  {
+    "id": "supplemental:py-invalid-assignment",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "1 = x\n",
+      "sha256": "cbf630658653273d8bf87bb912d6dadbe53a6c8358d7048f7b0bcc23983c5fe9"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "1=x\n",
+      "sha256": "ada3187b38afbf608fb3b1989af8763fe4977c7c8e6e7406e64ee23836beaba9"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the py-invalid-assignment policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-invalid-assignment"
+    }
+  },
+  {
+    "id": "supplemental:py-template-string-314",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = t'{value}'\n",
+      "sha256": "d45d578a9135dcf3c09b9bac99fb74b938668268cef36a549911a4082c7d8a28"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x=t'{value}'\n",
+      "sha256": "910017606e07afc4ab5316720a0e29f45cbaa1c1d07889fa527e91344ff08419"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-template-string-314 policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-template-string-314"
+    }
+  },
+  {
+    "id": "supplemental:py-empty-vs-comment",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "# explanation\n",
+      "sha256": "85f1ed936b744c86a93a2980e34ff8c49737961ffac2d41132b06e476442fb4c"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-empty-vs-comment policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-empty-vs-comment"
+    }
+  },
+  {
+    "id": "supplemental:py-empty-vs-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "\"docs\"\n",
+      "sha256": "a92df967c92eeeb47ca4c40decf104bc584d64ce0f78ae1750319d97087b0fce"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-empty-vs-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-empty-vs-docstring"
+    }
+  },
+  {
+    "id": "supplemental:py-crlf-formatting",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = 1\n",
+      "sha256": "9e26bf369911c45c243c684147b23fc9e1dcfcf257d299a1c632016a6fcd33f4"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = 1\r\n",
+      "sha256": "eccc39336aa8fb60a3dd2e3eb2c56a0f2759b67df27ac8a27a48f22dd691fb34"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-crlf-formatting policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-crlf-formatting"
+    }
+  },
+  {
+    "id": "supplemental:py-bom",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = 1\n",
+      "sha256": "9e26bf369911c45c243c684147b23fc9e1dcfcf257d299a1c632016a6fcd33f4"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "﻿x = 1\n",
+      "sha256": "ac05c7c476da9f4d0b14a6d051e7b1cf9ad2eda130563dba378dda764fb558cb"
+    },
+    "expected": "different",
+    "historicalExpected": "characterize",
+    "policyDecision": "D5",
+    "rationale": "D5: a leading UTF-8 BOM is parsed as an encoding marker but retained in source identity; adding or removing it remains distinct. Original source bytes are unchanged.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-bom"
+    }
+  },
+  {
+    "id": "supplemental:py-invalid-utf8",
+    "language": "python",
+    "before": {
+      "encoding": "base64",
+      "content": "eCA9ICL/Igo=",
+      "sha256": "25b813e294778852c5b0faefc1e599c2f1d1e4e319da5347f2437d82d46074e7"
+    },
+    "after": {
+      "encoding": "base64",
+      "content": "eCA9ICL+Igo=",
+      "sha256": "e0facb66a70a45ec3730074cad023e639fbcbae05826338a4417d1c9c9b7631a"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the py-invalid-utf8 policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-invalid-utf8"
+    }
+  },
+  {
+    "id": "supplemental:py-nul",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x=1\u0000\n",
+      "sha256": "d8ed6ce08c7761a3519aca0adca4bd7b8ad3f211632afaea9cb5a21bf0a18ae8"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x=2\u0000\n",
+      "sha256": "0d709f8389b3fff2bdb4c816750164a0f13aae1803da009ac3de62c503e57c79"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the py-nul policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "py-nul"
+    }
+  },
+  {
+    "id": "supplemental:unknown-final-newline",
+    "language": "unknown",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = 1",
+      "sha256": "8ff436def1451285599a1b1ad70800493b8dcafde2912e1a38345633054e4c26"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = 1\n",
+      "sha256": "9e26bf369911c45c243c684147b23fc9e1dcfcf257d299a1c632016a6fcd33f4"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the unknown-final-newline policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "unknown-final-newline"
+    }
+  },
+  {
+    "id": "supplemental:ts-quote-spelling",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = 'hello';\n",
+      "sha256": "3f7b1c27e46413e59552262a5b7a0990b2610de7844e83ce16be35374603b10d"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = \"hello\";\n",
+      "sha256": "47ffdc971447f71be2b56d08098bd40b215cae776297571a4d2a25925e25d1ce"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-quote-spelling policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-quote-spelling"
+    }
+  },
+  {
+    "id": "supplemental:ts-redundant-parentheses",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = (1 + 2);\n",
+      "sha256": "2d20b37628ddab2f2e15412245cf72166ad1f45e710383a7e4f1d2af5cdabb65"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = 1 + 2;\n",
+      "sha256": "551cd22fef83bca4f8f23114d907453320234e32b6710c65ef2adab6aa74c18f"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-redundant-parentheses policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-redundant-parentheses"
+    }
+  },
+  {
+    "id": "supplemental:ts-template-blank-lines",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = `a\n\nb`;\n",
+      "sha256": "658405523f15769ead1e75744d41110a60ec133f568561ee250889fd67e3c2c4"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = `a\nb`;\n",
+      "sha256": "8631cd2288e3be6bebc9e71e816bdce2c334720f9c40059c3559f26e7b5da724"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-template-blank-lines policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-template-blank-lines"
+    }
+  },
+  {
+    "id": "supplemental:ts-template-trailing-space",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = `a  \nb`;\n",
+      "sha256": "11d8762b5bd632ec54853f51b622136a70f6e1c28c4fc0d4bf4334145d3a321e"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = `a\nb`;\n",
+      "sha256": "8631cd2288e3be6bebc9e71e816bdce2c334720f9c40059c3559f26e7b5da724"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-template-trailing-space policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-template-trailing-space"
+    }
+  },
+  {
+    "id": "supplemental:ts-template-crlf",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = `a\r\nb`;\n",
+      "sha256": "5ccd33e0c3b09d01ac9eb6fe0164a54985f0f947cb7ba320b506e5de299cd7d4"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = `a\nb`;\n",
+      "sha256": "8631cd2288e3be6bebc9e71e816bdce2c334720f9c40059c3559f26e7b5da724"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-template-crlf policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-template-crlf"
+    }
+  },
+  {
+    "id": "supplemental:ts-regex-content",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = /a\\/\\/b/g;\n",
+      "sha256": "87c6d26fa778345dce81e6416ca522ae48cfe1895ad6dcb3f500357e5c4a40c7"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = /a\\/\\/c/g;\n",
+      "sha256": "76de4cc29bcc56047a9e6c80afe54bce3f90ad9105a6775cc6505325c972bd58"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-regex-content policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-regex-content"
+    }
+  },
+  {
+    "id": "supplemental:ts-unicode-formatting",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "const café = '😀';\nexport const x = café + 'é';\n",
+      "sha256": "733edba69933cb765e6af169ccf0522048284338727cee4f3cfa965e74a6707a"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "const café='😀';\nexport const x=café+'é';\n",
+      "sha256": "96ef4cc3c990fbf49274b5bcbf325e65919023e2d6a4fce6312e63120ef33e4a"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the ts-unicode-formatting policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-unicode-formatting"
+    }
+  },
+  {
+    "id": "supplemental:ts-empty-vs-comment",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "/** docs */\n",
+      "sha256": "ab43b4a090e6961219e358049759aabddf59752035809425890ab86ac884edda"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the ts-empty-vs-comment policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-empty-vs-comment"
+    }
+  },
+  {
+    "id": "supplemental:ts-missing-token-both",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export function f( {\n",
+      "sha256": "fa6fb2ad6d8dd89b690180955c25853e1b49b9261a957b7738a5e18f29eb7b3f"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export function f(  {\n",
+      "sha256": "b8817a319fe462ac4cca3a3b2c2b5d1c1878c1ab0c7465deb8727b94c80f3fec"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the ts-missing-token-both policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-missing-token-both"
+    }
+  },
+  {
+    "id": "supplemental:ts-invalid-utf8",
+    "language": "typescript",
+    "before": {
+      "encoding": "base64",
+      "content": "eCA9ICL/Igo=",
+      "sha256": "25b813e294778852c5b0faefc1e599c2f1d1e4e319da5347f2437d82d46074e7"
+    },
+    "after": {
+      "encoding": "base64",
+      "content": "eCA9ICL+Igo=",
+      "sha256": "e0facb66a70a45ec3730074cad023e639fbcbae05826338a4417d1c9c9b7631a"
+    },
+    "expected": "fallback-required",
+    "rationale": "Protect the ts-invalid-utf8 policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "id": "ts-invalid-utf8"
+    }
+  },
+  {
+    "id": "supplemental:py-fstring-expression-formatting",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = f'{value + 1}'\n",
+      "sha256": "c7cfa6592590b128a6396d11c1418b08ef2d5876e406ae67c12b43ccebe8b8bd"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = f'{value+1}'\n",
+      "sha256": "0892c8af35cbf04cde9404315b85ee4e4f039ff0eadc8b02ca18019c9e0050b1"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-fstring-expression-formatting policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "py-fstring-expression-formatting"
+    }
+  },
+  {
+    "id": "supplemental:ts-template-expression-formatting",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = `${value + 1}`;\n",
+      "sha256": "6a41a28f195d389cc017e0ac4315d176bc6a3acea456df31b93db1738420125d"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = `${value+1}`;\n",
+      "sha256": "4de036e25419a1808058037ecb981d308d7c5f109e60f2829a36dec2e734ef3a"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the ts-template-expression-formatting policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "ts-template-expression-formatting"
+    }
+  },
+  {
+    "id": "supplemental:ts-template-expression-comment",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = `${value /* explanation */ + 1}`;\n",
+      "sha256": "9732a69889687a19ef00746a3359b7eea079d8010021c7c70cd8c3f3d71145ca"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = `${value + 1}`;\n",
+      "sha256": "6a41a28f195d389cc017e0ac4315d176bc6a3acea456df31b93db1738420125d"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the ts-template-expression-comment policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "ts-template-expression-comment"
+    }
+  },
+  {
+    "id": "supplemental:ts-optional-semicolon",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = 1;\n",
+      "sha256": "b40dedde60828bf61d1fadbfc3bb7ea2e0421e9511d22f1b5fb44ae5ba07dbb3"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = 1\n",
+      "sha256": "f5603a6435f46cecb5040b2afb318027528b4e87b81afade0c260cf7ed7066b2"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-optional-semicolon policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "ts-optional-semicolon"
+    }
+  },
+  {
+    "id": "supplemental:py-not-docstring-in-if",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "if enabled:\n    'A'\n",
+      "sha256": "9a0fa9290b0030ca17cef45a9615f3f7c68e799916ee95c414928c7d7131a0eb"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "if enabled:\n    'B'\n",
+      "sha256": "c05fe5dbd4ffcdc7141d00e662e898ccd1b56d0e98e1eb3b609a6e1bd6326e4d"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-not-docstring-in-if policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "py-not-docstring-in-if"
+    }
+  },
+  {
+    "id": "supplemental:py-docstring-following-comment",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f():\n    # comment\n    'A'\n    return 1\n",
+      "sha256": "caf8eca0b074e305cb82cdbd67ecce02cf7566cb5a0a4979378d889a82cfc410"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f():\n    'B'\n    return 1\n",
+      "sha256": "74edd0d7f288a199bed453848def30ffbc14d8ae957734346b394c04f106108f"
+    },
+    "expected": "equivalent",
+    "rationale": "Protect the py-docstring-following-comment policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "py-docstring-following-comment"
+    }
+  },
+  {
+    "id": "supplemental:py-nonleading-standalone-string",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "x = 1\n'A'\n",
+      "sha256": "a3f309568a56a0532bff98ad01a403e72cafbcd979d05ff27844c1fec0d5f6c2"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "x = 1\n'B'\n",
+      "sha256": "f48d0451d746582e8246ed038796451d174272d23fd25b07100bafd2a193fd69"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-nonleading-standalone-string policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "py-nonleading-standalone-string"
+    }
+  },
+  {
+    "id": "supplemental:ts-template-expression-operator",
+    "language": "typescript",
+    "before": {
+      "encoding": "utf8",
+      "content": "export const x = `${value + 1}`;\n",
+      "sha256": "6a41a28f195d389cc017e0ac4315d176bc6a3acea456df31b93db1738420125d"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "export const x = `${value - 1}`;\n",
+      "sha256": "7bf38bea0e03fc69e9e9c05a6334e34413c0c78dc0b05e3b3946de2a4fdbf14a"
+    },
+    "expected": "different",
+    "rationale": "Protect the ts-template-expression-operator policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "ts-template-expression-operator"
+    }
+  },
+  {
+    "id": "supplemental:py-function-docstring-promotion",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "def f():\n    'docs'\n    'A'\n    return 1\n",
+      "sha256": "6f09e336950e8a308cd39b510a90461d776d359fb46ebe017fc72c08028a5317"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "def f():\n    'docs'\n    'B'\n    return 1\n",
+      "sha256": "8ef2dfe752adb505ca594b043e8349a3c63f6a0ffb408b060972181aa7631b8d"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-function-docstring-promotion policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "py-function-docstring-promotion"
+    }
+  },
+  {
+    "id": "supplemental:py-lambda-no-docstring",
+    "language": "python",
+    "before": {
+      "encoding": "utf8",
+      "content": "f = lambda: 'A'\n",
+      "sha256": "2e1403d09ad7c6dd62c212acf8fc675b7d24ed0f5078ee4c9f712562919d2193"
+    },
+    "after": {
+      "encoding": "utf8",
+      "content": "f = lambda: 'B'\n",
+      "sha256": "d543f1d8ec58aafb3febf3ce2038ca0be1f525fa0ff9699926f3f218f9d71a2f"
+    },
+    "expected": "different",
+    "rationale": "Protect the py-lambda-no-docstring policy boundary; expectation comes from the reviewed research input, not generated canonical output.",
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "id": "py-lambda-no-docstring"
+    }
+  }
+]

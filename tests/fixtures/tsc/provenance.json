@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Hand-reviewed policy inputs, not captured canonical output or proof of backend correctness",
+  "sourceArtifacts": [
+    {
+      "file": "experiments/difftastic-investigation/pairs.json",
+      "sha256": "6e696a52054e7466e1bcbe5f7226f3702c20e043b8b298ffc59989891c4a91da"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/base.py",
+      "sha256": "e4083eb31e44c78644364f3db8e7aee6c811af58138a649044494d1031c17a58"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/comments.py",
+      "sha256": "51f8c445d354910637e57c2a192f913ffbeeda1ae29cffe559ee71a1bc24cede"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/docstrings.py",
+      "sha256": "9e07ed1c3db9131a7e60cccba828f5953917c1f24e907f84f1234f2f4ad09216"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/documentation.py",
+      "sha256": "e74b8792009faa060767c4647748a867802d4b06393581e324203bd9ee9ea538"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/formatting.py",
+      "sha256": "d5df746207c163ea7e25840304cb519e2155f9729d8fbdb33e5e9f76f8481216"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/identifier.py",
+      "sha256": "5546ab7686a87993cfbbfc53a518a70dc70fc9e504a36191e63d2fee1ac351ef"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/invalid.py",
+      "sha256": "523848f9aece41da2f4996658fbc908e3b90974ce1cfa1fe7c2d1e7e8ceae270"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/literal-spelling.py",
+      "sha256": "f0e9cb7176fa5534b252a35155c7d76592a38d96d0cd0bd06958225ae23fae21"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/nesting.py",
+      "sha256": "05ad40514db1d99df6270abca1ee6a3b221c41a3f9f7fd28ad3f3a9fc1a4b988"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/operator.py",
+      "sha256": "2a5590a892508cf9b88ef47b0ee1100a3c58b8c8f5f327e0c8c074754f201023"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/order-after.py",
+      "sha256": "542511879ea44d39804fd988941ab21a54d8504025aa65de13a6d48ae70a5a7d"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/order-before.py",
+      "sha256": "20bdbbb32a1f6d8d63efa3c9c947ba9dffacbb85baf55ddc404c199c175815cf"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/string-content.py",
+      "sha256": "bd134c06053b74f4aab2e7a1013d039069c5d8729a27ec64034d5416aa271439"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/strings-after.py",
+      "sha256": "4dfdec0b79997d16fd3976fa8a8d687d1fc84b9439e406941b74c3ec052f6763"
+    },
+    {
+      "file": "experiments/difftastic-investigation/python/strings-before.py",
+      "sha256": "46cb6e209a6398deb0c5cecb75faf69a1b29d265620404353f9f69ce1a8a5031"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/asi-after.ts",
+      "sha256": "536ff0e61ecadd37e433ad83b220c698bb0eea773a957c5ef808bfa0b657eaac"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/asi-before.ts",
+      "sha256": "2261c43abaa31fac910e944ea90d88395309f88e970fc3c159d8061012c705a5"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/base.ts",
+      "sha256": "11ca764718487d96e17b52d90270a637b4fd7960b48c52bcccd82f8706c6d965"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/directive-after.ts",
+      "sha256": "ed1a6cd70466f6b186b94e915f4fbb8d050d2214087b34a4186a9b35eecdba95"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/directive-before.ts",
+      "sha256": "8234dead907617bdf0a400a03e1f8ca22e16770747fb39bcd3f6643b4323e7bf"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/documentation.ts",
+      "sha256": "facd659901ad7fe24d45d6c0e77fd4231eb62fdc44c63d6d19cc6fc155ae56eb"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/formatting.ts",
+      "sha256": "e3a39936f9763e668e0f1967a5582166461fae939ecd81b844aeee866e71d721"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/identifier.ts",
+      "sha256": "5dd6778e8775b6ee62df991b6a2b5378d8c7e7ce712e33d47fb1980285f1bbe8"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/invalid.ts",
+      "sha256": "811ee459c05196540ed6d4c8e976e09c509a09f7887c7deaccbeb1df61ea56fd"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/literal-spelling.ts",
+      "sha256": "b705fc422e7b9c1a8bfc1fa46205aac5c6667955a78547875aa45a9faf7262c0"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/nesting.ts",
+      "sha256": "d25ce282f02226053b09150c18d89838e2a7828703fa14d9c93129289f9bea39"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/operator.ts",
+      "sha256": "a0928a9bfd32e24f27be7d2c2764cca8f45f3460b46157ae67ab5f2962d0ba21"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/order-after.ts",
+      "sha256": "df7fe8dff4f26a0ec88ae3deffaea917dbef992bb445e5c46abf924da62fb213"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/order-before.ts",
+      "sha256": "fe21512eea2b9576a5dcc01a358e3bfbfa7e31d6bf0795fbd3915360eded8dd0"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/string-content.ts",
+      "sha256": "f5af811943f59921dffa0ef27e7760ee9079a0ec7f0c1267e9f18759851ce9c9"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/strings-after.ts",
+      "sha256": "956c551c7545013fcce537deb75833e99b6bf07fcc24da42aa328f83904827e0"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/strings-before.ts",
+      "sha256": "dd29c0cce6e874a7405070bf9a8f739cac20fe44d8fafe555b2b4e497d930914"
+    },
+    {
+      "file": "experiments/difftastic-investigation/typescript/template-whitespace.ts",
+      "sha256": "9f83d0f1181d5b443ad067a49dc15afb883e8bb6bfcf52973f0abf6c0c78509f"
+    },
+    {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "sha256": "a02b11ad884483061b6c05c9552a4918ac8b777c7a6a9da232503979c3c6c164"
+    },
+    {
+      "file": "experiments/syntax-normalization-investigation/extra-pairs.json",
+      "sha256": "7ab8de2b733984b249d10750a0821a491170019837feaaff370782972cc858b5"
+    },
+    {
+      "file": "experiments/syntax-normalization-investigation/followup-pairs.json",
+      "sha256": "c2aec6a0792742b493847eaeeb96649aecd285e6538badc5470c52070abbca13"
+    }
+  ],
+  "promotionScriptSha256": "c217b7fbfc9580d1115c840c21744f3afd132b710def819487509b9efafb2107",
+  "historicalSourcePairs": 71,
+  "historicalHelperPairs": 20,
+  "addedResidualPairs": 16,
+  "helperRule": "D8-B: canonical residual edits plus sorted added declaration identities; residual need not equal baseline"
+}

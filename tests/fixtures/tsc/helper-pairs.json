@@ -1,0 +1,938 @@
+[
+  {
+    "id": "historical:python:placement",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "6e1a104b124d31bf9a63b6c7e813c7103f53027f1920eb4c018d45467a26d89a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\ndef helper():\n    return 2\nsentinel = 0\n",
+      "sha256": "4964a5de120acdc7a554cb6a38698d03f92089b194f68b1455d4b5cd93b928c5"
+    },
+    "expected": "equivalent",
+    "rationale": "Same helper on either side of an unchanged function.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:placement"
+    }
+  },
+  {
+    "id": "historical:python:multiple-helper-order",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef other():\n    return 3\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "52bfcdc7e5e570d2b4a0774b17f77b11a243c276cdeeaaca7e3286cf18869ef7"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def other():\n    return 3\ndef existing():\n    return 1\ndef helper():\n    return 2\nsentinel = 0\n",
+      "sha256": "543ac2fee1afeaa58cc9b195fe61bfbd755a9083601711f5921531c0cd78f800"
+    },
+    "expected": "equivalent",
+    "rationale": "Added helper collection is order-independent.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:multiple-helper-order"
+    }
+  },
+  {
+    "id": "historical:python:helper-body",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "6e1a104b124d31bf9a63b6c7e813c7103f53027f1920eb4c018d45467a26d89a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 9\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "57d748e39cdacab2356750baf38b21bd51a814aa523edfe586cbfd16d5c4eb1f"
+    },
+    "expected": "different",
+    "rationale": "Changed helper implementation remains visible.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:helper-body"
+    }
+  },
+  {
+    "id": "historical:python:helper-name",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "6e1a104b124d31bf9a63b6c7e813c7103f53027f1920eb4c018d45467a26d89a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def different():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "cbdf375f1df60efaed911e56be0e7fa16600ac72a61d93bc44cef52bd0cbbab1"
+    },
+    "expected": "different",
+    "rationale": "Different helper name remains visible.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:helper-name"
+    }
+  },
+  {
+    "id": "historical:python:existing-edit",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "6e1a104b124d31bf9a63b6c7e813c7103f53027f1920eb4c018d45467a26d89a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 9\ndef helper():\n    return 2\nsentinel = 0\n",
+      "sha256": "e5695e1e01d5635c38911a8a93438cb9b790ead78f3d7de856a9dfc057db0533"
+    },
+    "expected": "different",
+    "rationale": "Changing existing code disables the pure-addition shortcut.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:existing-edit"
+    }
+  },
+  {
+    "id": "historical:python:global-edit",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "6e1a104b124d31bf9a63b6c7e813c7103f53027f1920eb4c018d45467a26d89a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\ndef helper():\n    return 2\nsentinel = 1\n",
+      "sha256": "8f8d3f4cb016243de4c4b26d2409eb6ec1f6eb7325691fde7d94f7903d866b09"
+    },
+    "expected": "different",
+    "rationale": "Accompanying global change disables the shortcut.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:global-edit"
+    }
+  },
+  {
+    "id": "historical:python:duplicate-name",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "cfe88bf403df051620be2a3827c62f6fb7a78bd132ce708256ef7ede75581c52"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\ndef helper():\n    return 2\ndef helper():\n    return 2\nsentinel = 0\n",
+      "sha256": "5b04a0a1ddd5208627bdc9f8e3db5a220d7b5d9bfc2593e6b28f344ce711d989"
+    },
+    "expected": "different",
+    "rationale": "Duplicate function declarations disable the shortcut.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:duplicate-name"
+    }
+  },
+  {
+    "id": "historical:python:end-of-file",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "6e1a104b124d31bf9a63b6c7e813c7103f53027f1920eb4c018d45467a26d89a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\ndef helper():\n    return 2",
+      "sha256": "3658550edc316ea4403bfe8d83bee9a666d7de16efad57010f3ab42c33d023d3"
+    },
+    "expected": "equivalent",
+    "rationale": "Location and final-newline diff artifacts do not split identical additions.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:end-of-file"
+    }
+  },
+  {
+    "id": "historical:python:async-helper",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "async def helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "b34c1c0ce3fb815a682fa843e7209dfd9e03e04038b17c0b581f2521f713fef7"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nasync def helper():\n    return 2\nsentinel = 0\n",
+      "sha256": "75bfc743c3bfb891f94c16bd15863cf11c38ebe83f80caa94eb6cd653dfea613"
+    },
+    "expected": "equivalent",
+    "rationale": "Async declaration identity is preserved.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:async-helper"
+    }
+  },
+  {
+    "id": "historical:typescript:placement",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d9ab09b18fee88208d11f882e136fb1f91cfa4356973b6cc3b6f909963cb6521"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nexport function helper() { return 2; }\nconst sentinel = 0;\n",
+      "sha256": "6b0c61186ad3dd54256af4bfd369d79e1fd1d0fc73dc2f8361334687c367abf7"
+    },
+    "expected": "equivalent",
+    "rationale": "Same helper on either side of an unchanged function.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:placement"
+    }
+  },
+  {
+    "id": "historical:typescript:multiple-helper-order",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function other() { return 3; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "63bf99064a538a8b3fc3215768df6154fbc2d355a67861d5937d39eaabd7913c"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function other() { return 3; }\nexport function existing() { return 1; }\nexport function helper() { return 2; }\nconst sentinel = 0;\n",
+      "sha256": "f85c37bcd9254f662769029c7de4d846029c2556beb2ebfcd79546bb118be030"
+    },
+    "expected": "equivalent",
+    "rationale": "Added helper collection is order-independent.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:multiple-helper-order"
+    }
+  },
+  {
+    "id": "historical:typescript:helper-body",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d9ab09b18fee88208d11f882e136fb1f91cfa4356973b6cc3b6f909963cb6521"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 9; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "783c1da054ce59c5c8e132b6fecf9104a0c03f9621649b94ca0b70d513f83ddc"
+    },
+    "expected": "different",
+    "rationale": "Changed helper implementation remains visible.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:helper-body"
+    }
+  },
+  {
+    "id": "historical:typescript:helper-name",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d9ab09b18fee88208d11f882e136fb1f91cfa4356973b6cc3b6f909963cb6521"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function different() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "ebd60132569f263c2209cee187e3190d10048570b0bb6390e8eb7eca970ff6ab"
+    },
+    "expected": "different",
+    "rationale": "Different helper name remains visible.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:helper-name"
+    }
+  },
+  {
+    "id": "historical:typescript:existing-edit",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d9ab09b18fee88208d11f882e136fb1f91cfa4356973b6cc3b6f909963cb6521"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 9; }\nexport function helper() { return 2; }\nconst sentinel = 0;\n",
+      "sha256": "38fa15e9d081ece621263f598fe33d89db2b769338717d8b4dc3d0d5cc49c5c9"
+    },
+    "expected": "different",
+    "rationale": "Changing existing code disables the pure-addition shortcut.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:existing-edit"
+    }
+  },
+  {
+    "id": "historical:typescript:global-edit",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d9ab09b18fee88208d11f882e136fb1f91cfa4356973b6cc3b6f909963cb6521"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nexport function helper() { return 2; }\nconst sentinel = 1;\n",
+      "sha256": "9ef18618f04d2e4562a9788b5e3ab9af473d7fbfc363aa34140fbafd4cb864ea"
+    },
+    "expected": "different",
+    "rationale": "Accompanying global change disables the shortcut.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:global-edit"
+    }
+  },
+  {
+    "id": "historical:typescript:duplicate-name",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "ae9e3350b9d647b8cd283d630a5c42d40da8dceb6e8a73ae6ce1f6ef42d8d2ec"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nexport function helper() { return 2; }\nexport function helper() { return 2; }\nconst sentinel = 0;\n",
+      "sha256": "a096b66649ff368cb7ea9d5defbc1feecf3bc2afc034026f18eb69eda4351996"
+    },
+    "expected": "different",
+    "rationale": "Duplicate function declarations disable the shortcut.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:duplicate-name"
+    }
+  },
+  {
+    "id": "historical:typescript:end-of-file",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d9ab09b18fee88208d11f882e136fb1f91cfa4356973b6cc3b6f909963cb6521"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\nexport function helper() { return 2; }",
+      "sha256": "83ad71d6b8f4a7561aa0ef3e4277ac5b803185d14e5cb5b951fc0274a3c7acf1"
+    },
+    "expected": "equivalent",
+    "rationale": "Location and final-newline diff artifacts do not split identical additions.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:end-of-file"
+    }
+  },
+  {
+    "id": "historical:typescript:async-helper",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "1372d6788b9149e75c982a9d531d0a2c5294dcd1268ceb641ac5f2e75a940cdb"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export async function helper() { return 2; }\nexport function existing() { return 1; }\nconst sentinel = 0;\n",
+      "sha256": "d4688c2644e3c8491937f0ec4db2bf12a3b8833c6ab7872fa594ab0ef901a377"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function existing() { return 1; }\nexport async function helper() { return 2; }\nconst sentinel = 0;\n",
+      "sha256": "cb947343ae5694135f4f3b00c082456d49eb1ec76e4ef2986a17b3badd006c99"
+    },
+    "expected": "equivalent",
+    "rationale": "Async declaration identity is preserved.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "typescript:async-helper"
+    }
+  },
+  {
+    "id": "historical:python:accepted-binding-order-risk",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "helper = 7\ndef existing():\n    return helper\n",
+      "sha256": "b6c3de1a0557672dad06004f4b8e715c24126fab10a6354718cf3ebb8d8771c6"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def helper():\n    return 2\nhelper = 7\ndef existing():\n    return helper\n",
+      "sha256": "a6426cb3a133645a9ad10de7f6f2876de289d9098a041be1c34f7bb72cb673c2"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "helper = 7\ndef existing():\n    return helper\ndef helper():\n    return 2\n",
+      "sha256": "faf7fdf82be2101b5979e289dc5d452965869b8506680af52478e1bd987aee1b"
+    },
+    "expected": "equivalent",
+    "rationale": "Deliberate heuristic boundary: both compile, but the final helper binding differs. No regression command was run.",
+    "acceptedOrderingRisk": true,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:accepted-binding-order-risk"
+    }
+  },
+  {
+    "id": "historical:python:decorated-helper",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "f246382725af4478d1ffd4200d5e874bfa03ec4ff5e09bee6fb62bca99e6076b"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "@decorate\ndef helper():\n    return 2\ndef existing():\n    return 1\nsentinel = 0\n",
+      "sha256": "e3ce1398fbba937599976179e58a7178f54ba6155a6f8864c65841e29ad116bf"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def existing():\n    return 1\n@decorate\ndef helper():\n    return 2\nsentinel = 0\n",
+      "sha256": "11fe12e9384cec9a97fd0397d6579fc272f8e2dca806acff54959f8cbcf5999c"
+    },
+    "expected": "equivalent",
+    "rationale": "Attached decorator is part of helper identity; decorator execution order remains an accepted heuristic risk.",
+    "acceptedOrderingRisk": true,
+    "origin": {
+      "file": "experiments/syntax-normalization-investigation/evidence/added-helper-grouping.json",
+      "id": "python:decorated-helper"
+    }
+  },
+  {
+    "id": "residual:python:changed-caller-same-residual",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\n",
+      "sha256": "3197afc6bf6b46c02f1fe2f127bafaf80c117c65564e34af0dffc1f644818a5a"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef calculate(value):\n    return adjust(value)\n",
+      "sha256": "f4f9884d46acb8a33279d88ce1e5af416624b63f1cb33e0d044465dc104066bf"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\ndef adjust(value):\n    return value + 1\n",
+      "sha256": "0e75adaf158c0e0d07ac93906361880c8d9ab52b9bd90df752e3852ea8f4a3f1"
+    },
+    "expected": "equivalent",
+    "rationale": "D8-B: same caller edit and same helper, different insertion location.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:different-caller-residual",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\n",
+      "sha256": "3197afc6bf6b46c02f1fe2f127bafaf80c117c65564e34af0dffc1f644818a5a"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef calculate(value):\n    return adjust(value)\n",
+      "sha256": "f4f9884d46acb8a33279d88ce1e5af416624b63f1cb33e0d044465dc104066bf"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value) + 2\ndef adjust(value):\n    return value + 1\n",
+      "sha256": "0d37731fabc3fa47d253ec64f5a14decf7baf0d198781b0680f6809c426dd964"
+    },
+    "expected": "different",
+    "rationale": "D8-B retains differing caller edits.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:same-global-residual",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\nsetting = 0\n",
+      "sha256": "0afb5f4265a4f56f58ab67be59c92781b942df34c30d05a9d47c5998565c69dd"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef calculate(value):\n    return adjust(value)\nsetting = 1\n",
+      "sha256": "d7eed0037e7f50a48cc37fcdcefcb0c7244f410da7ac5a3a1041095fa77f5508"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\nsetting = 1\ndef adjust(value):\n    return value + 1\n",
+      "sha256": "9dc17010b4a9a14d072fd9d8f7b931cbee177f128544a0ef6906014bb9cdb828"
+    },
+    "expected": "equivalent",
+    "rationale": "D8-B: same global/caller edits survive helper subtraction and agree.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:different-global-residual",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\nsetting = 0\n",
+      "sha256": "0afb5f4265a4f56f58ab67be59c92781b942df34c30d05a9d47c5998565c69dd"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef calculate(value):\n    return adjust(value)\nsetting = 1\n",
+      "sha256": "d7eed0037e7f50a48cc37fcdcefcb0c7244f410da7ac5a3a1041095fa77f5508"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\nsetting = 2\ndef adjust(value):\n    return value + 1\n",
+      "sha256": "db120bb472b0ffc664c38971427fb5075ce0374659c9c9f91be4c758ee0ee2db"
+    },
+    "expected": "different",
+    "rationale": "D8-B retains different global edits.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:different-helper-body",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\n",
+      "sha256": "3197afc6bf6b46c02f1fe2f127bafaf80c117c65564e34af0dffc1f644818a5a"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef calculate(value):\n    return adjust(value)\n",
+      "sha256": "f4f9884d46acb8a33279d88ce1e5af416624b63f1cb33e0d044465dc104066bf"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\ndef adjust(value):\n    return value + 2\n",
+      "sha256": "74556796d17d37b2d91c26643fac8f0b683509f1d5e2f255c27bba0ce412f528"
+    },
+    "expected": "different",
+    "rationale": "Equal residual edits do not hide helper body differences.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:multiple-additions-mixed-edit",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\n",
+      "sha256": "3197afc6bf6b46c02f1fe2f127bafaf80c117c65564e34af0dffc1f644818a5a"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef other(value):\n    return value * 2\ndef calculate(value):\n    return adjust(value)\n",
+      "sha256": "ad5dcd6eee9b30fb4b549d2d1b270b00a1bcfcadc8a1d309a808f3c0587814ce"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def other(value):\n    return value * 2\ndef calculate(value):\n    return adjust(value)\ndef adjust(value):\n    return value + 1\n",
+      "sha256": "c34971f323c12443ede7f745c8636f9e4f71b0611a9558aa2f1dfe41d0d93bd9"
+    },
+    "expected": "equivalent",
+    "rationale": "Sort only added helper declarations; preserve the same existing-code edit.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:no-added-helper",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\n",
+      "sha256": "3197afc6bf6b46c02f1fe2f127bafaf80c117c65564e34af0dffc1f644818a5a"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\n",
+      "sha256": "9e01c182fa46e96d8b8c2941b1f2b833df4115315f1ecfbbf7fad984b43d83cd"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\n",
+      "sha256": "9e01c182fa46e96d8b8c2941b1f2b833df4115315f1ecfbbf7fad984b43d83cd"
+    },
+    "expected": "equivalent",
+    "rationale": "An empty added-helper collection must not change identity mode arbitrarily.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:python:removed-existing-function",
+    "language": "python",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return value\ndef other(value):\n    return value * 2\n",
+      "sha256": "f50f96a2d62a983a769c3a9896c9c15d718024fb9bbb09f7ab2e0380f2c666ec"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "def adjust(value):\n    return value + 1\ndef calculate(value):\n    return adjust(value)\n",
+      "sha256": "f4f9884d46acb8a33279d88ce1e5af416624b63f1cb33e0d044465dc104066bf"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "def calculate(value):\n    return adjust(value)\ndef adjust(value):\n    return value + 1\n",
+      "sha256": "0e75adaf158c0e0d07ac93906361880c8d9ab52b9bd90df752e3852ea8f4a3f1"
+    },
+    "expected": "equivalent",
+    "rationale": "D8-B retains the same existing-function removal in residual identity.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:changed-caller-same-residual",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\n",
+      "sha256": "8a18613eb969f9f0449ef585fd10ed93999d6f3d50f49a4fb37bcbcb735425bc"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "5419f7400107e41351b55304203f8e41e5a7173c1d1db6f0ce47cc3aff0f47be"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\nexport function adjust(value: number) { return value + 1; }\n",
+      "sha256": "cd245de0c15e62cae0ce69b765dcd6182fdc36b7573c2da1ef0ca97ac2a96134"
+    },
+    "expected": "equivalent",
+    "rationale": "D8-B: same caller edit and same helper, different insertion location.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:different-caller-residual",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\n",
+      "sha256": "8a18613eb969f9f0449ef585fd10ed93999d6f3d50f49a4fb37bcbcb735425bc"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "5419f7400107e41351b55304203f8e41e5a7173c1d1db6f0ce47cc3aff0f47be"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value) + 2; }\nexport function adjust(value: number) { return value + 1; }\n",
+      "sha256": "bbf5d94610a6deda86cb5ba91d7de5ee6eb2c0f04927c34f37294bbcc2e7e64e"
+    },
+    "expected": "different",
+    "rationale": "D8-B retains differing caller edits.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:same-global-residual",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\nconst setting = 0;\n",
+      "sha256": "dbbd2bd1c87179e0915f9d4602cf98dedece2ec508d00ef49a21486026a6e226"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function calculate(value: number) { return adjust(value); }\nconst setting = 1;\n",
+      "sha256": "db8059af70efecfba4240fb334d07ec95b83acd17cea3d73076c2e623d311a97"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\nconst setting = 1;\nexport function adjust(value: number) { return value + 1; }\n",
+      "sha256": "7461e520fb7154f081a392a29722e1442bbb3ac91b9c7bca96131ca9117c62b2"
+    },
+    "expected": "equivalent",
+    "rationale": "D8-B: same global/caller edits survive helper subtraction and agree.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:different-global-residual",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\nconst setting = 0;\n",
+      "sha256": "dbbd2bd1c87179e0915f9d4602cf98dedece2ec508d00ef49a21486026a6e226"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function calculate(value: number) { return adjust(value); }\nconst setting = 1;\n",
+      "sha256": "db8059af70efecfba4240fb334d07ec95b83acd17cea3d73076c2e623d311a97"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\nconst setting = 2;\nexport function adjust(value: number) { return value + 1; }\n",
+      "sha256": "cb3f4be3a32200c092830bc950fd7dfcb2571c8ec5bdf6bcad076cecaa68c529"
+    },
+    "expected": "different",
+    "rationale": "D8-B retains different global edits.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:different-helper-body",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\n",
+      "sha256": "8a18613eb969f9f0449ef585fd10ed93999d6f3d50f49a4fb37bcbcb735425bc"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "5419f7400107e41351b55304203f8e41e5a7173c1d1db6f0ce47cc3aff0f47be"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\nexport function adjust(value: number) { return value + 2; }\n",
+      "sha256": "60b94d74f377c43a2ffc027ddf1b76666c1c9723e0dafe59831672ac710642b3"
+    },
+    "expected": "different",
+    "rationale": "Equal residual edits do not hide helper body differences.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:multiple-additions-mixed-edit",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\n",
+      "sha256": "8a18613eb969f9f0449ef585fd10ed93999d6f3d50f49a4fb37bcbcb735425bc"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function other(value: number) { return value * 2; }\nexport function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "e57e7f89f5fb0c076277b3741ef5eca2176ad2c901e6ffbd7d892f067951fb0a"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function other(value: number) { return value * 2; }\nexport function calculate(value: number) { return adjust(value); }\nexport function adjust(value: number) { return value + 1; }\n",
+      "sha256": "c813fb1f61e37031c596e00e38b9c7049d4d0dc5a5f2c24b2ddc58af6a22f0bf"
+    },
+    "expected": "equivalent",
+    "rationale": "Sort only added helper declarations; preserve the same existing-code edit.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:no-added-helper",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\n",
+      "sha256": "8a18613eb969f9f0449ef585fd10ed93999d6f3d50f49a4fb37bcbcb735425bc"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "55d778f6c11c675a81f1c0c0b415ba3a0b0074b396e9e0ca4935fad85dc9cdbd"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "55d778f6c11c675a81f1c0c0b415ba3a0b0074b396e9e0ca4935fad85dc9cdbd"
+    },
+    "expected": "equivalent",
+    "rationale": "An empty added-helper collection must not change identity mode arbitrarily.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  },
+  {
+    "id": "residual:typescript:removed-existing-function",
+    "language": "typescript",
+    "baseline": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return value; }\nexport function other(value: number) { return value * 2; }\n",
+      "sha256": "6880e1d608f1c362fe15a636ca0f6af5824e6da5910d73cdd5a72cc873f941e3"
+    },
+    "candidateA": {
+      "encoding": "utf8",
+      "content": "export function adjust(value: number) { return value + 1; }\nexport function calculate(value: number) { return adjust(value); }\n",
+      "sha256": "5419f7400107e41351b55304203f8e41e5a7173c1d1db6f0ce47cc3aff0f47be"
+    },
+    "candidateB": {
+      "encoding": "utf8",
+      "content": "export function calculate(value: number) { return adjust(value); }\nexport function adjust(value: number) { return value + 1; }\n",
+      "sha256": "cd245de0c15e62cae0ce69b765dcd6182fdc36b7573c2da1ef0ca97ac2a96134"
+    },
+    "expected": "equivalent",
+    "rationale": "D8-B retains the same existing-function removal in residual identity.",
+    "acceptedOrderingRisk": false,
+    "origin": {
+      "file": "tests/fixtures/tsc/README.md",
+      "id": "D8-B"
+    }
+  }
+]

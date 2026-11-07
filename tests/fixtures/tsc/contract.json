@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "status": "p0-contract-not-runtime-support",
+  "choice": {
+    "values": ["agentless", "tsc"],
+    "default": "agentless",
+    "scope": "per-run",
+    "cancelBeforeRunCreation": true
+  },
+  "identity": {
+    "policy": "complete-tree-tsc-mixed-v1",
+    "canonicalization": "tsc-canonical-tree-v1",
+    "helpers": "added-helper-residual-v1",
+    "registry": "python-typescript-files-v1",
+    "sourceFallback": "lossless-paired-source-v1",
+    "framing": "tagged-json-arrays-utf8-sha256-v1",
+    "helperCollectionOrder": "utf8-byte-order-of-json-name-and-declaration",
+    "pathOrder": "raw-path-byte-order",
+    "retainLiteralSpelling": true,
+    "retainExistingCodeOrder": true,
+    "retainResidualEdits": true,
+    "requireResidualEqualBaseline": false,
+    "classifyDocumentationBeforeSubtraction": true,
+    "emptyHelperCollectionUsesSameFrame": true
+  },
+  "languages": [
+    {
+      "language": "python",
+      "extensions": [".py"],
+      "helpers": ["top-level-named-function-with-body", "async-function", "generator-function", "decorated-function"]
+    },
+    {
+      "language": "typescript",
+      "extensions": [".ts"],
+      "helpers": ["top-level-named-function-with-body", "async-function", "generator-function", "named-export-function"]
+    }
+  ],
+  "unsupportedExtensions": [".pyi", ".mts", ".cts", ".tsx", ".js", ".jsx"],
+  "extensionMatching": "case-sensitive-byte-suffix",
+  "typescriptDeclarationFiles": "ordinary-typescript-with-no-body-declarations-in-residual",
+  "unsupportedHelperForms": ["nested-function", "method", "arrow-binding", "ambient-or-no-body-declaration", "default-export-function", "anonymous-function"],
+  "duplicateFunctionNames": "disable-extraction-for-file",
+  "encoding": {
+    "decode": "strict-utf8",
+    "leadingUtf8Bom": "parse-after-marker-retain-marker-in-source-envelope",
+    "bomOnlyDifference": "different",
+    "stripCarriageReturns": false,
+    "rewriteFinalNewlines": false,
+    "invalidUtf8": "paired-exact",
+    "nul": "paired-exact"
+  },
+  "persistence": {
+    "newRunContractVersion": 1,
+    "newRecordVersions": {
+      "root": 2,
+      "base": 2,
+      "identity": 2,
+      "finalSelection": 2,
+      "candidate": 1,
+      "evaluation": 1,
+      "restoration": 1
+    },
+    "legacyAgentless": "read-captured-v1-with-existing-explicit-provenance",
+    "legacyAutomaticFinalization": false,
+    "inferMissingNewContract": false,
+    "mixedRunPolicies": "reject"
+  },
+  "execution": {
+    "batchTimeoutMs": 60000,
+    "workersPerBatch": 1,
+    "runtimeNetwork": false,
+    "sourceErrors": "paired-exact-with-diagnostic",
+    "infrastructureErrors": "fatal-whole-batch",
+    "limitsAffectSuccessfulIdentity": false
+  },
+  "dependencies": [
+    {
+      "package": "web-tree-sitter",
+      "version": "0.27.1",
+      "asset": "web-tree-sitter.wasm",
+      "sha256": "beca80e44cccbf2299ed4d1e3fa6462a9a6fe818aeebf847547a392227ce4acc",
+      "license": "MIT"
+    },
+    {
+      "package": "tree-sitter-python",
+      "version": "0.25.0",
+      "asset": "tree-sitter-python.wasm",
+      "sha256": "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47",
+      "license": "MIT"
+    },
+    {
+      "package": "tree-sitter-typescript",
+      "version": "0.23.2",
+      "asset": "tree-sitter-typescript.wasm",
+      "sha256": "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d",
+      "license": "MIT"
+    }
+  ],
+  "implementationGates": [
+    { "id": "resource-profile", "owner": "P2", "status": "pending-measurement", "blocksRuntimeEnablement": true },
+    { "id": "interpolation-adapters", "owner": "P1", "status": "pending-implementation", "blocksRuntimeEnablement": true },
+    { "id": "installed-package-offline-assets", "owner": "P2/P6", "status": "pending-validation", "blocksRuntimeEnablement": true },
+    { "id": "grammar-install-hooks", "owner": "P2/P6", "status": "pending-validation", "blocksRuntimeEnablement": true }
+  ]
+}
