@@ -2,7 +2,8 @@
 
 These repository fixtures preserve the reviewed research inputs independently of
 Git-ignored `docs/` and `experiments/`. They contain **desired policy outcomes**, not
-canonical outputs captured from a prototype. No production TSC backend exists yet.
+canonical outputs captured from a prototype. P1 now implements the source-level
+canonical core; there is still no selectable/bounded production TSC backend.
 
 P0 contract: [CONTRACT.md](CONTRACT.md) (behavior/API/persistence/gates) and
 [contract.json](contract.json) (explicit choices, versions and asset pins). These
@@ -62,7 +63,10 @@ they are expected behavior for implementation, not evidence of implemented suppo
 `tests/tsc-fixtures.test.mjs` validates fixture shape, bytes, checksums, IDs,
 coverage, and decision examples, including the explicit P0 contract and deferred
 enablement gates. It does not normalize candidate code or establish backend
-correctness. Future TSC behavior tests should consume these same files.
+correctness. `tests/tree-sitter-canonical.test.mjs` now consumes all 71 source
+pairs against real pinned offline WASM and adds original-ownership, interpolation,
+framing, error and cleanup checks. The 36 helper pairs await P3 extraction/grouping;
+P1's node omission API is not an implementation of helper selection.
 
 Research paths in `origin`/`sourceArtifacts` are provenance strings only. Tests and
 runtime must not import/read those ignored locations. No external downloads,

@@ -5,6 +5,27 @@ export const AGENTLESS_REVISION = "5ce5888b9f149beaace393957a55ea8ee46c9f71";
 export const PYODIDE_VERSION = "314.0.7";
 export const BUNDLED_PYTHON_VERSION = "3.14.2";
 
+// Core-only TSC contracts. Persisted TSC provenance is not supported until P5.
+export const TSC_CANONICALIZATION_POLICY = "tsc-canonical-tree-v1";
+export const TSC_REGISTRY_POLICY = "python-typescript-files-v1";
+export const TSC_RUNTIME_ASSET = Object.freeze({
+  package: "web-tree-sitter", version: "0.27.1", asset: "web-tree-sitter.wasm",
+  sha256: "beca80e44cccbf2299ed4d1e3fa6462a9a6fe818aeebf847547a392227ce4acc",
+});
+export const TSC_LANGUAGES = Object.freeze([
+  Object.freeze({
+    language: "python", extension: ".py", package: "tree-sitter-python", version: "0.25.0",
+    asset: "tree-sitter-python.wasm",
+    sha256: "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47",
+  } as const),
+  Object.freeze({
+    language: "typescript", extension: ".ts", package: "tree-sitter-typescript", version: "0.23.2",
+    asset: "tree-sitter-typescript.wasm",
+    sha256: "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d",
+  } as const),
+]);
+export type TscLanguage = typeof TSC_LANGUAGES[number]["language"];
+
 export const PYTHON_NORMALIZATION_PROVENANCE = Object.freeze({
   policy: PYTHON_NORMALIZATION_POLICY,
   upstreamRevision: AGENTLESS_REVISION,

@@ -16,6 +16,13 @@ npm ci
 pi --extension ./extensions/index.ts
 ```
 
+Development installs now include pinned Tree-sitter WASM test dependencies. The
+upstream grammar packages have native install hooks: ordinary `npm ci` attempted
+a native build and failed without a C compiler on the tested Linux ARM64 sandbox.
+For **WASM-only development/tests**, use `npm ci --ignore-scripts` if those hooks
+fail; this is a per-command workaround, not a global npm setting or validation of
+production grammar distribution. The normalizer tests never load native bindings.
+
 Then start a run:
 
 ```text
@@ -399,6 +406,16 @@ node --test tests/*.test.mjs
 ```
 
 Tests use Node.js’s built-in test runner and `jiti`, without emitting build artifacts. Tests do not establish provider compatibility; use a disposable repository/session for live smoke testing.
+
+The internal Tree-sitter canonicalization core is under development, **not a
+selectable final-voting policy yet**. Its Python/TypeScript tests use pinned,
+hash-checked offline WASM, preserve literal fragments and original docstring
+ownership, and canonicalize embedded expressions without printing source. Debug
+f-string display prefixes and Python template-string expression metadata remain
+exact. Invalid source/bytes request lossless fallback; infrastructure errors
+propagate. Bounded worker execution, helper grouping, complete-tree integration,
+persisted policy selection and installed-package validation remain separate work.
+The P0 contract/corpus is in [tests/fixtures/tsc](tests/fixtures/tsc/README.md).
 
 Final selection uses complete-snapshot content trees and retains binary-safe,
 initial-workspace-relative patch export helpers. Selection/restoration are integrated

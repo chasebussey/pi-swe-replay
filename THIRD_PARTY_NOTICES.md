@@ -20,6 +20,30 @@ runtime/resource errors remain fatal. No upstream regression fallback is adopted
 Reference fixtures and the development oracle are documented separately in
 [`tests/reference/agentless/README.md`](tests/reference/agentless/README.md).
 
+## Tree-sitter canonicalization development dependencies
+
+The core tests use unmodified package-distributed WASM assets, not native grammar
+bindings or host compilers, from:
+
+- [web-tree-sitter 0.27.1](https://github.com/tree-sitter/tree-sitter/tree/v0.27.1),
+  copyright (c) 2018 Max Brunsfeld;
+  [MIT notice](licenses/tree-sitter-runtime-MIT.txt).
+- [tree-sitter-python 0.25.0](https://github.com/tree-sitter/tree-sitter-python/tree/v0.25.0),
+  copyright (c) 2016 Max Brunsfeld;
+  [MIT notice](licenses/tree-sitter-python-MIT.txt).
+- [tree-sitter-typescript 0.23.2](https://github.com/tree-sitter/tree-sitter-typescript/tree/v0.23.2),
+  copyright (c) 2017 Max Brunsfeld;
+  [MIT notice](licenses/tree-sitter-typescript-MIT.txt).
+
+Versions and WASM hashes are pinned in the core policy definitions and checked by
+tests. These remain development dependencies until bounded-worker/production
+asset integration is implemented. Grammar packages have native install hooks and
+transitive dependencies; scoped `--ignore-scripts` installation was required for
+WASM-only development on the tested Linux ARM64 sandbox. Runtime WASM usage does
+not establish compiler-free package installation on every target. Preserve npm
+package/transitive notices; audit distribution and installed offline loading before
+enabling the new policy. This is not an exhaustive npm dependency license list.
+
 ## Pyodide 314.0.7
 
 The runtime dependency is used unmodified. Its npm metadata declares MPL-2.0.

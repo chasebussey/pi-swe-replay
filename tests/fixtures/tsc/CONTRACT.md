@@ -24,7 +24,10 @@ or appended newline, and no object-key-order dependence:
   inside literal nodes. Preserve delimiter/prefix/escape tokens; canonicalize
   embedded expressions as ordinary children. Preserve the source prefix displayed
   by Python debug interpolation, conversions/specifications, tagged-template raw
-  text, and significant literal whitespace. No unparse or generic line cleanup.
+  text, and significant literal whitespace. Python 3.14 template-string interpolation
+  expression source is observable metadata even without debug `=` and is protected
+  too; only ordinary f-string/template embedded-code trivia is incidental. No
+  unparse or generic line cleanup.
 - `["source", "utf8" | "utf8-bom", canonicalRoot]` for parsed source identity.
 - `[name, canonicalFullDeclaration]` for each extracted helper, preserving wrappers.
 - `["canonical", baselineSourceEnvelope, residualCandidateSourceEnvelope,
@@ -84,6 +87,11 @@ is different. Never strip U+FEFF globally, CR or final newlines. Preserve litera
 contents. Invalid UTF-8, NUL/binary, symlinks and unsupported kinds compare exact
 original content and metadata. ERROR or MISSING recovery on either side triggers
 paired exact source comparison and bounded diagnostics, before filtering.
+Additional/nonleading U+FEFF ignored by a grammar outside protected text requests
+explicit `unsupported-trivia` exact handling rather than disappearing. U+FEFF in
+literal/format fragments remains exact content. TypeScript comment classification
+includes its pinned grammar's comment, hash_bang_line and html_comment kinds;
+no generic isExtra filter may erase other syntax.
 
 An identical-byte shortcut is not evidence of successful parsing. Source errors
 are not infrastructure failures. Missing/corrupt WASM, parser/runtime exceptions,
