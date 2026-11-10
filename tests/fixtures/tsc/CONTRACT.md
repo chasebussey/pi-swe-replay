@@ -1,8 +1,8 @@
 # TSC v1 implementation contract (P0)
 
 This specifies the implementation contract, **not selectable TSC voting support**.
-P2 source-level batching/worker support is implemented; helper/complete-tree/record
-integration remains future work.
+P2 source-level batching/worker support and P3 helper/residual projection are
+implemented; complete-tree/record integration remains future work.
 Machine-readable choices/pins: `contract.json`. Test inputs: `source-pairs.json`
 and `helper-pairs.json`. No generated canonical hashes serve as correctness oracles.
 The runtime compatibility owner will remain `normalization-policy.ts`, not these
@@ -212,5 +212,7 @@ launch settings are outside such a guarantee. V8 heap guards are supplementary
 and may be affected by host launch flags. Trusted installed implementation code is
 assumed unmodified; parsing input content is distinct from executing those modules.
 P4 must bound workspace reads/candidate/file translation before allocating inputs,
-not rely on the worker after an unbounded blob read. P3 helper extraction, P4 tree
-identities and P5/P6 persisted/user policy integration still block automatic voting.
+not rely on the worker after an unbounded blob read. P3 projects trusted canonical
+subtrees from the original classified trees without rewriting/reparsing source;
+P4 must bound and integrate that downstream projection as well as tree identities.
+P4 tree identities and P5/P6 persisted/user policy integration still block automatic voting.

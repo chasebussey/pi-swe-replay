@@ -13,6 +13,7 @@ import { createJiti } from "jiti";
 const require = createRequire(import.meta.url);
 const jiti = createJiti(import.meta.url, { fsCache: false });
 const { normalizeTscSources } = await jiti.import("../extensions/swe-replay/tree-sitter-normalization.ts");
+const { tscHelperResidual } = await jiti.import("../extensions/swe-replay/tree-sitter-helpers.ts");
 const { TSC_LANGUAGES, TSC_CANONICALIZATION_POLICY, tscSourceProvenance } = await jiti.import("../extensions/swe-replay/normalization-policy.ts");
 const { tscLimits, TSC_NORMALIZATION_LIMITS, TSC_RESOURCE_PROFILE } = await jiti.import("../extensions/swe-replay/tree-sitter-limits.ts");
 const { executeTscWorker } = await jiti.import("../extensions/swe-replay/tree-sitter-worker-client.ts");
@@ -88,6 +89,30 @@ test("bounded offline worker matches all 71 source cases and is deterministic ac
       assert.equal(Buffer.byteLength(a.canonical), a.metrics.canonicalBytes);
     }
   }
+});
+
+test("helper residuals from offline worker sources match all 36 pairs across fresh workers and input order", async (t) => {
+  const { options } = await setup(t);
+  const helpers = JSON.parse(readFileSync(new URL("./fixtures/tsc/helper-pairs.json", import.meta.url), "utf8"));
+  const sources = helpers.flatMap((item, index) => ["baseline", "candidateA", "candidateB"].map((side) => ({
+    id: `${index}-${side}`, path: Buffer.from(item.language === "python" ? "x.py" : "x.ts"), content: blob(item[side]),
+  })));
+  const first = await normalizeTscSources(sources, options);
+  const second = await normalizeTscSources([...sources].reverse(), options);
+  const project = (batch) => {
+    const byId = new Map(batch.results.map((result) => {
+      assert.equal(result.kind, "canonical", result.id);
+      return [result.id, JSON.parse(result.canonical)];
+    }));
+    return helpers.map((item, index) => {
+      const baseline = byId.get(`${index}-baseline`);
+      const a = tscHelperResidual(item.language, baseline, byId.get(`${index}-candidateA`));
+      const b = tscHelperResidual(item.language, baseline, byId.get(`${index}-candidateB`));
+      assert.equal(JSON.stringify(a) === JSON.stringify(b), item.expected === "equivalent", item.id);
+      return [a, b];
+    });
+  };
+  assert.deepEqual(project(first), project(second));
 });
 
 test("the batch snapshots input/options and deduplicates only equal language/raw-source pairs", async (t) => {

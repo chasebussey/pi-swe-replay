@@ -2,8 +2,8 @@
 
 These repository fixtures preserve the reviewed research inputs independently of
 Git-ignored `docs/` and `experiments/`. They contain **desired policy outcomes**, not
-canonical outputs captured from a prototype. P2 now implements the source-level
-canonical core and bounded offline worker API; there is still no selectable
+canonical outputs captured from a prototype. P1–P3 implement the source-level
+canonical core, bounded offline worker API and helper/residual projection; there is still no selectable
 complete-tree TSC voting policy.
 
 P0 contract: [CONTRACT.md](CONTRACT.md) (behavior/API/persistence/gates) and
@@ -59,8 +59,9 @@ function declarations require the defined conservative extraction guard.
 
 The historical 20 cases were originally probed under a pure-addition shortcut.
 Their pairwise desired results still hold under D8-B: their differing residual
-edits remain distinct. The **16 new cases have not been run against a TSC backend**;
-they are expected behavior for implementation, not evidence of implemented support.
+edits remain distinct. All 36 cases now run against the canonical core and fresh
+offline workers followed by the P3 helper/residual projection. This validates the
+source-level rule, not complete-tree identities or final-voting integration.
 
 ## Tests and provenance
 
@@ -71,8 +72,13 @@ correctness. `tests/tree-sitter-canonical.test.mjs` consumes all 71 source pairs
 pinned offline WASM. `tests/tree-sitter-normalization.test.mjs` also exercises them
 through disposable workers, protocol/asset failure paths, resource boundaries and
 cleanup. Explicit developer probes live under `tests/manual/` (not automatic tests).
-The 36 helper pairs await P3 extraction/grouping; node omission is groundwork, not
-an implementation of helper selection.
+`tests/tree-sitter-helpers.test.mjs` consumes all 36 helper pairs and exercises
+original documentation ownership, duplicate/overload guards, unsupported forms,
+full declaration identity, encoding markers and UTF-8 ordering. The helper module
+projects trusted canonical subtrees after original-tree classification; it does
+not reparse residual source. Worker tests also run all 36 pairs across fresh workers
+and reversed input order. P4 still owns complete-tree path/metadata framing, paired
+exact fallback and bounded downstream integration.
 
 Research paths in `origin`/`sourceArtifacts` are provenance strings only. Tests and
 runtime must not import/read those ignored locations. No external downloads,
