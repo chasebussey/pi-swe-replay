@@ -29,7 +29,18 @@ Then start a run:
 /swe-replay 5 Fix the bug described in issue 123
 ```
 
-Pi asks for a **regression test command**, such as `npm ci && npm test`. A nonempty command is required; cancelling the dialog starts no run. UI input is currently required (interactive Pi or a compatible RPC client).
+Pi first asks for **patch equivalence**, with **TSC selected by default**, then a
+**regression test command**, such as `npm ci && npm test`. TSC groups `.py` and `.ts`
+syntax and newly added helpers; Agentless is an explicit alternative using its
+Python heuristic. Other files use exact-content handling. Both are heuristics,
+not proof of semantic equivalence. TSC may download pinned grammar WASM on first
+use; see the cache/network requirements below.
+
+A supported choice and nonempty regression command are required. Canceling either
+dialog starts no run, creates no workspace snapshot, and sends no prompt. The
+choice is frozen for the entire run, including archived branches; it is not passed
+to the model. There is no persistent setting or command-line policy flag. UI input
+is required (interactive Pi or a compatible RPC client).
 
 The command runs first against the initial snapshot, which must pass, then against every completed trajectory. Each evaluation uses a fresh disposable Git worktree, with a ten-minute timeout, from the equivalent working directory. Ignored dependencies such as `node_modules` are **not copied**: include setup in your command or use a repository script. Commands execute through `bash -lc` and must propagate test failures.
 
@@ -174,10 +185,23 @@ final vote.
 
 Patches are measured against the **initial workspace**, not `HEAD`, so preexisting
 staged, unstaged, and nonignored untracked user work is not mistakenly counted as
-the agent's patch. Equivalence uses the pinned Agentless-derived Python heuristic
-and exact-content handling for other file kinds, with mode/existence preservation.
-Comment/docstring-only Python changes can normalize away; this is a voting
-heuristic, not proof of semantic equivalence or task correctness.
+the agent's patch. Equivalence uses the run's captured choice:
+
+- **TSC (default)**: pinned Tree-sitter syntax grouping for case-sensitive `.py`
+  and `.ts` (including `.d.ts`), ignoring classified comments/docstrings and
+  incidental syntax whitespace while preserving literal spelling/content. Newly
+  added top-level named concrete functions can group independently of placement
+  when the remaining edits match. Binding/decorator order can matter: this is a
+  heuristic, not a semantic-equivalence guarantee. `.pyi`, `.mts`, `.cts`, `.tsx`,
+  `.js`, `.jsx`, uppercase suffixes and unsupported file kinds stay exact.
+- **Agentless**: pinned Agentless-derived Python normalization for supported `.py`
+  files, with exact-content handling for other files. Comment/docstring-only
+  Python edits can normalize away.
+
+Both preserve paths, modes, existence and binary/invalid-UTF-8 content. Source
+parse errors use paired exact-content fallback with captured diagnostics;
+asset/runtime/resource failures stop finalization, never silently switch policies.
+Neither policy adds automatic compilation or proves task correctness.
 
 The largest group wins by **plurality**, without needing over 50% of votes. Ties
 and representative selection favor the earliest passing iteration. The completion
@@ -187,7 +211,7 @@ Selection is persisted before restoration. A recovery snapshot is then retained,
 and Pi navigates to the representative's completed candidate entry **without a
 branch summary**. Only after navigation is verified does the extension restore
 that candidate's **original snapshot**, including index state. It does not apply
-normalized Python source or grouping keys. The next agent turn therefore sees the
+canonical/normalized source or grouping keys. The next agent turn therefore sees the
 selected trajectory's conversation and workspace, not the last iteration's context.
 
 No eligible winner means an explicit no-winner result and no final restoration.
@@ -214,7 +238,12 @@ The overview puts the run's result first, followed by requested/completed iterat
 
 The iteration list shows approach (exploration, exploitation, or fallback), regression status, patch group, vote/exclusion reason, and a `★` on the final selected representative. Select a row for its replacement target, evaluation exit code/duration, and candidate association. Enter opens that iteration's recorded steps in Trajectories when available. On the Result / diagnostics row, Enter focuses details, including warnings and recovery/finalization errors.
 
-Press `e` to reveal/hide captured regression stdout/stderr for the selected iteration, or baseline output on the Result / diagnostics row. Output is never included in the plain-text summary. Final votes and outcomes come from persisted records: opening the view does not normalize patches, rerun voting, retest, or restore anything. Unsupported or inconsistent records remain unavailable with diagnostics rather than being reconstructed. Group labels (`G1`, `G2`, …) are local display labels in captured ranking order, not durable patch identities.
+Press `e` to reveal/hide captured regression stdout/stderr for the selected iteration, or baseline output on the Result / diagnostics row. Output is never included in the plain-text summary. The Overview summary labels the captured equivalence policy. Result details show
+captured provenance/execution limits; iteration details show captured exact-fallback
+diagnostics and any capture-time truncation. Non-TUI summaries include the same
+policy/diagnostic evidence. Legacy outcomes are labeled read-only, while unsupported
+or inconsistent policies remain unavailable rather than being assigned a default.
+Final votes and outcomes come from persisted records: opening the view does not normalize patches, rerun voting, retest, or restore anything. Unsupported or inconsistent records remain unavailable with diagnostics rather than being reconstructed. Group labels (`G1`, `G2`, …) are local display labels in captured ranking order, not durable patch identities.
 
 Final voting is separate from exploitation sampling. Each eligible completed iteration contributes one vote; the largest equivalent-patch group wins by plurality, with ties favoring the earliest passing iteration. Regression passing is not proof of task correctness. If a session contains multiple runs, `n` cycles runs without dedicating a tab to a run picker.
 
@@ -415,11 +444,11 @@ node --test tests/*.test.mjs
 
 Tests use Node.js’s built-in test runner and `jiti`, without emitting build artifacts. Tests do not establish provider compatibility; use a disposable repository/session for live smoke testing.
 
-The internal Tree-sitter canonicalization (TSC) backend now implements bounded
-complete-tree grouping, durable policy-aware records and finalization dispatch.
-It is **not a user-selectable replay policy yet**: commands still resolve the
-Agentless-compatible default explicitly; per-run choice/display and integrated
-release validation remain pending. Its Python/TypeScript tests use pinned,
+The Tree-sitter canonicalization (TSC) backend implements bounded complete-tree
+grouping, durable policy-aware records and finalization dispatch, and is the
+**default per-run dialog choice**. Agentless remains explicitly selectable.
+Integrated real-Pi/provider release validation remains pending; selectable does
+not mean production-ready. Its Python/TypeScript tests use pinned,
 hash-checked offline WASM, preserve literal fragments and original docstring
 ownership, and canonicalize embedded expressions without printing source. Debug
 f-string display prefixes and Python template-string expression metadata remain
@@ -462,8 +491,9 @@ files are size/hash-verified and atomically cached under
 also accepts an explicit cache directory and offline-only mode. Cache reads are
 reverified; corrupt/missing offline entries and supported-grammar download failures
 are errors, not permission to change voting policy. Only validated HTTPS GitHub
-asset-CDN redirects are followed. The programmatic TSC finalization path uses this fetcher; slash commands still
-choose Agentless until the policy-choice milestone. Tests use offline caches or
+asset-CDN redirects are followed. TSC replay finalization uses this fetcher;
+first use needs access to those GitHub releases and approved asset redirects.
+After provisioning, a valid cache supports offline normalization. Tests use offline caches or
 mocked transports, with real upstream acquisition checked separately.
 No grammar binaries are bundled into this repository.
 
@@ -477,7 +507,11 @@ node tests/manual/tsc-installed-smoke.mjs
 The first uses local dev WASM seeds with no network; the second packs into a
 disposable directory, performs a normal production-only npm installation, downloads
 the approved upstream grammars, then checks the installed worker offline after a
-cwd change and with no PATH tools. It may use network for npm and grammar acquisition.
+cwd change and with no PATH tools. It restores PATH for Git-backed complete-tree
+dispatch under both TSC and Agentless, with host fetch disabled. It also asserts
+packaged workers, Python source and license assets are present. Runtime WASM comes
+from installed dependencies; grammar binaries are verified cache assets, not
+vendored package files. It may use network for npm and grammar acquisition.
 This passed on Linux ARM64/Node 22.22.1 without installed native grammar packages;
 it is not an all-platform, Pi UI or provider-backed replay validation.
 

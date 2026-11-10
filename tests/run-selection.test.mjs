@@ -586,6 +586,7 @@ test("the command reports selected/restored and no-winner outcomes without expor
     h.pi.registerCommand = (name, options) => commands.set(name, options);
     extension(h.pi);
     h.ctx.hasUI = true;
+    h.ctx.ui.select = async (_title, options) => options[1]; // Explicit Agentless choice.
     h.ctx.ui.input = async () => "true";
     const notices = [];
     h.ctx.ui.notify = (message, level) => notices.push({ message, level });
@@ -596,6 +597,24 @@ test("the command reports selected/restored and no-winner outcomes without expor
     assert.match(notice.message, empty ? /remain at the last iteration/ : /Workspace and conversation restored/);
     assert.equal(h.entries.filter((e) => e.type === "custom_message").length, 0);
     assert.equal(h.promptCount(), 1);
+  }
+});
+
+test("direct command freezes either selected policy before baseline and sends no prompt on baseline failure", async (t) => {
+  const { default: extension } = await jiti.import("../extensions/index.ts");
+  for (const backend of ["tsc", "agentless"]) {
+    const h = harness(false, t);
+    const commands = new Map();
+    h.pi.registerCommand = (name, options) => commands.set(name, options);
+    extension(h.pi);
+    h.ctx.mode = "rpc";
+    h.ctx.hasUI = true;
+    h.ctx.ui.select = async (_title, choices) => choices[backend === "tsc" ? 0 : 1];
+    h.ctx.ui.input = async () => "false";
+    await assert.rejects(commands.get("swe-replay").handler("1 task", h.ctx), /Regression baseline failed/);
+    assert.equal(records(h, "swe-replay-root")[0].data.normalizationContract.backend, backend);
+    assert.equal(records(h, "swe-replay-base")[0].data.normalizationContract.backend, backend);
+    assert.equal(h.promptCount(), 0);
   }
 });
 

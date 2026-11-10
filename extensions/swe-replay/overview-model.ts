@@ -15,6 +15,7 @@ export interface IterationOverview {
   group?: string;
   vote: string;
   representative: boolean;
+  normalizationDiagnostics?: string[];
 }
 
 export interface ReplayOverview {
@@ -29,6 +30,8 @@ export interface ReplayOverview {
   testTimeoutMs?: number;
   cwd?: string;
   diagnostics: string[];
+  normalizationPolicy?: string;
+  normalizationDetails?: string[];
 }
 
 const sameIds = (value: unknown, ids: string[]) => strings(value) && value.length === ids.length
@@ -110,6 +113,41 @@ function capturedDecision(d: FinalSelectionDecision, archive: ReplayArchive): Fi
   return d;
 }
 
+/** Format only validated captured policy evidence, never today's default. */
+function normalizationOverview(archive: ReplayArchive): Pick<ReplayOverview, "normalizationPolicy" | "normalizationDetails"> {
+  const provenance = archive.base.schemaVersion === 2 ? archive.base.normalizationContract.provenance
+    : archive.identities[0]?.normalization;
+  if (!provenance) return {};
+
+  // Legacy labels are shown only from explicit validated identity evidence.
+  const details = [`Captured equivalence: ${provenance.policy}${archive.base.schemaVersion === 1 ? " (legacy read-only)" : ""}`];
+  if (provenance.policy === PATCH_IDENTITY_POLICY) {
+    details.push(...Object.entries(provenance.python).map(([name, value]) => `Python ${name}: ${value}`));
+  } else {
+    const tsc = provenance.tsc;
+    details.push(...(["canonicalization", "helpers", "registry", "sourceFallback", "framing"] as const)
+      .map((name) => `TSC ${name}: ${tsc[name]}`));
+    details.push(`Runtime: ${tsc.runtime.package}@${tsc.runtime.version}`, `Runtime WASM SHA-256: ${tsc.runtime.sha256}`);
+    for (const grammar of tsc.grammars) {
+      details.push(`Grammar ${grammar.language}: ${grammar.package}@${grammar.version}`, `Grammar WASM SHA-256: ${grammar.sha256}`);
+    }
+  }
+
+  if (archive.base.schemaVersion === 2) {
+    const execution = archive.base.normalizationExecution;
+    details.push(`Execution: ${execution.backend} · deadline ${execution.timeoutMs}ms`);
+    if (execution.backend === "tsc") {
+      details.push(`Source profile: ${execution.sourceResourceProfile}`,
+        ...Object.entries(execution.sourceLimits).map(([name, value]) => `  ${name}: ${value}`),
+        `Workspace profile: ${execution.workspaceResourceProfile}`,
+        ...Object.entries(execution.workspaceLimits).map(([name, value]) => `  ${name}: ${value}`));
+    }
+  }
+
+  details.push("Grouping heuristic, not proof of semantic equivalence. Original snapshots are restored, never canonical source.");
+  return { normalizationPolicy: provenance.policy, normalizationDetails: details };
+}
+
 /** Entries must already be scoped by nearest replay-root ownership. */
 export function buildReplayOverview(entries: readonly SessionEntry[], rootEntryId: string): ReplayOverview {
   const view: ReplayOverview = { headline: "Run incomplete · no automatic final selection recorded", notes: [], iterations: [], groups: [], diagnostics: [] };
@@ -144,6 +182,7 @@ export function buildReplayOverview(entries: readonly SessionEntry[], rootEntryI
 
   const archive = result.archive;
   view.archiveAvailable = true;
+  Object.assign(view, normalizationOverview(archive));
   const exploitLogs = custom.filter((entry) => entry.customType === "swe-replay-exploit-log");
   for (const candidate of [...archive.candidates].sort((a, b) => a.iteration - b.iteration)) {
     const evidence = evaluations.filter(({ data }) => data?.candidateEntryId === candidate.entryId);
@@ -169,9 +208,22 @@ export function buildReplayOverview(entries: readonly SessionEntry[], rootEntryI
     }
     if (approach === "Unknown") view.diagnostics.push(`Ambiguous or invalid approach for iteration ${candidate.iteration}.`);
 
+    const identity = archive.identities.find((item) => item.candidateEntryId === candidate.entryId)?.normalization;
+    const normalizationDiagnostics: string[] = [];
+    if (identity?.policy === PATCH_IDENTITY_POLICY) {
+      normalizationDiagnostics.push(...identity.diagnostics.map((d) => `Exact fallback: ${d.path} · ${d.pythonType}: ${d.message}`));
+    } else if (identity) {
+      normalizationDiagnostics.push(...identity.diagnostics.map((d) => {
+        const path = Buffer.from(d.pathBase64, "base64").toString("utf8");
+        return `Exact fallback: ${path} (path base64: ${d.pathBase64}) · ${d.side}: ${d.reason}`
+          + d.issues.map((issue) => ` · ${issue.kind} ${issue.nodeType} [${issue.startIndex}, ${issue.endIndex}]`).join("");
+      }));
+      if (identity.diagnosticsTruncated) normalizationDiagnostics.push(`${identity.diagnosticsTruncated} additional fallback diagnostics omitted at capture.`);
+    }
+
     view.iterations.push({ candidateEntryId: candidate.entryId, iteration: candidate.iteration,
       terminalEntryId: candidate.terminalEntryId, approach, targetStepId, evaluation: linked ? evaluation : undefined,
-      vote: "not recorded", representative: false });
+      vote: "not recorded", representative: false, normalizationDiagnostics });
   }
 
   const selections = custom.filter((entry) => entry.customType === "swe-replay-final-selection");

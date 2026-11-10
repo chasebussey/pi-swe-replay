@@ -17,6 +17,12 @@ function run(command, args, cwd) {
 try {
   const packed = JSON.parse(run("npm", ["pack", "--json", "--pack-destination", directory], repo));
   assert.ok(packed[0].files.every((file) => !file.path.endsWith(".wasm")), "grammar/runtime dependency binaries must not be vendored in the package");
+  for (const asset of ["extensions/index.ts", "extensions/swe-replay/tree-sitter-normalization-worker.mjs",
+    "extensions/swe-replay/python-normalization-worker.mjs", "extensions/swe-replay/agentless-normalization.py",
+    "licenses/tree-sitter-runtime-MIT.txt", "licenses/tree-sitter-python-MIT.txt", "licenses/tree-sitter-typescript-MIT.txt",
+    "licenses/jiti-MIT.txt", "licenses/pyodide-MPL-2.0.txt", "licenses/cpython-3.14.2.txt", "THIRD_PARTY_NOTICES.md"]) {
+    assert.ok(packed[0].files.some((file) => file.path === asset), `Missing runtime asset/notice: ${asset}`);
+  }
   const tarball = path.join(directory, packed[0].filename);
   writeFileSync(path.join(directory, "package.json"), JSON.stringify({ name: "tsc-installed-smoke", private: true, type: "module" }));
   // No ignore-scripts flag: production dependencies must install normally. Pi is
@@ -29,7 +35,8 @@ try {
   writeFileSync(path.join(directory, "smoke.mjs"), `
 import assert from 'node:assert/strict';
 import { createJiti } from 'jiti';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 const jiti = createJiti(import.meta.url, { fsCache: false });
 const { normalizeTscSources } = await jiti.import('pi-swe-replay/extensions/swe-replay/tree-sitter-normalization.ts');
@@ -45,11 +52,40 @@ const inputs = ${JSON.stringify(sourceInputs)}.map(([id, name, source]) => ({
 const live = await normalizeTscSources(inputs, { grammar: { cacheDir } });
 assert.ok(live.results.every(value => value.kind === 'canonical'));
 globalThis.fetch = () => { throw Error('Host network forbidden after provisioning'); };
+const originalPath = process.env.PATH;
 process.env.PATH = '';
 process.chdir('node_modules');
 const offline = await normalizeTscSources(inputs, { grammar: { cacheDir, offline: true } });
 assert.deepEqual(offline.results, live.results);
-console.log(JSON.stringify({ installedNoGrammarPackages: true, canonicalSources: offline.results.length,
+// Complete-tree dispatch also needs Git, but never a host compiler or Python.
+process.env.PATH = originalPath;
+const { ReplayWorkspace } = await jiti.import('pi-swe-replay/extensions/swe-replay/workspace.ts');
+const { normalizeWorkspacePatches } = await jiti.import('pi-swe-replay/extensions/swe-replay/patch-normalization.ts');
+const { resolveNormalization } = await jiti.import('pi-swe-replay/extensions/swe-replay/normalization-contract.ts');
+const fixture = path.resolve('../fixture');
+mkdirSync(fixture);
+const git = (...args) => execFileSync('git', args, { cwd: fixture, stdio: 'pipe' });
+git('init'); git('config', 'user.name', 'Smoke'); git('config', 'user.email', 'smoke@example.com');
+writeFileSync(path.join(fixture, 'a.py'), 'x=1\\n');
+writeFileSync(path.join(fixture, 'a.ts'), 'const x=1;\\n');
+git('add', '.'); git('commit', '-m', 'initial');
+const workspace = await ReplayWorkspace.open(fixture);
+const base = await workspace.contentTree(await workspace.capture('smoke', 'base'));
+writeFileSync(path.join(fixture, 'a.py'), 'x=2\\n');
+writeFileSync(path.join(fixture, 'a.ts'), 'const x=2;\\n');
+const candidate = await workspace.contentTree(await workspace.capture('smoke', 'candidate'));
+const policies = [];
+for (const backend of ['tsc', 'agentless']) {
+ const resolved = resolveNormalization(backend);
+ const normalized = await normalizeWorkspacePatches(workspace, base, [candidate], {
+  backend, timeoutMs: resolved.normalizationExecution.timeoutMs, grammar: { cacheDir, offline: true },
+ });
+ assert.equal(normalized.policy, resolved.normalizationContract.provenance.policy);
+ assert.equal(normalized.patches[0].rawEmpty, false);
+ assert.equal(normalized.patches[0].normalizationEmpty, false);
+ policies.push(normalized.policy);
+}
+console.log(JSON.stringify({ installedNoGrammarPackages: true, canonicalSources: offline.results.length, completeTreePolicies: policies,
  offlineWorkerAfterCwdChange: true, provenance: offline.provenance, resourceProfile: offline.resourceProfile,
  metrics: offline.results.map(value => ({ id:value.id, ...value.metrics })) }));
 `);

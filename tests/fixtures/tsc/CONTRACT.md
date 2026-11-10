@@ -1,9 +1,10 @@
 # TSC v1 implementation contract (P0)
 
-This specifies the implementation contract, **not selectable TSC voting support**.
+This specifies the implementation contract for **experimental selectable TSC**.
 P2 source-level batching/workers, P3 helper/residual projection, P4 bounded complete-
-tree identities and P5 captured contracts/archive/finalization are implemented.
-User-facing choice/display and installed/real-Pi release validation remain P6/P7.
+tree identities, P5 captured contracts/archive/finalization and P6 per-run choice,
+captured display and installed offline complete-tree dispatch are implemented.
+P7 integrated/provider-backed release validation remains pending.
 Machine-readable choices/pins: `contract.json`. Test inputs: `source-pairs.json`
 and `helper-pairs.json`. No generated canonical hashes serve as correctness oracles.
 The runtime compatibility owner is `normalization-policy.ts`, not these
@@ -103,7 +104,8 @@ whole batch; no partial votes or fallback-to-another-backend behavior.
 
 ## Frozen run choice, persistence and compatibility
 
-Per-run choices `agentless` and `tsc`, initial default `agentless`. Collect choice
+Per-run choices `tsc` and `agentless`, default `tsc` (user amendment during P6,
+superseding P0's initial Agentless default). Collect choice
 and required regression input before run/controller/workspace mutation. Cancel
 any input without creating a run or sending prompts. No model instruction change
 or persistent preference in v1. Pass immutable resolved options, not multiple
@@ -144,14 +146,16 @@ support is distinct from new-run finalization capability.
 
 `normalization-contract.ts` owns execution validation and immutable snapshots.
 `resolveNormalization(choice, overrides)` requires an explicit choice: command/UI
-code alone supplies the initial Agentless default. `runSweReplay` and controller
+code alone supplies the TSC default. `runSweReplay` and controller
 starts receive resolved options, validate/snapshot them before workspace mutation,
 and keep the original prompt unchanged. Agentless execution captures schema v1,
 backend and timeout. TSC execution additionally captures both resource-profile IDs
 and complete tightening-only source/workspace limit objects. Validate requested
 candidate capacity before generation and root/base agreement during archive reads.
 Cache locations/transports are host settings, not captured equivalence provenance.
-The slash command continues to choose Agentless until P6 adds policy-choice input.
+The slash command offers TSC first/default, with Agentless explicitly selectable;
+canceling either dialog starts no run. Captured Overview/summary policy, provenance,
+execution limits and fallback diagnostics are read-only, never recomputed.
 
 `normalization-records.ts` parses unknown identity shapes separately from archive
 ownership/association. V2 identity normalization nests `provenance`; typed parsed
@@ -239,8 +243,9 @@ exact/over depth 256, 512 duplicate sources, unique-count and cumulative-node fa
 Unit tests cover tightened exact/over node/depth/output/message budgets and failures.
 A packed normal production-only npm install (no ignore-scripts/native grammar deps)
 provisioned upstream assets and ran offline after cwd change with no PATH tools on
-Linux ARM64/Node 22.22.1. This is source-API validation, not an all-platform or Pi/
-provider-backed end-to-end claim. The explicit installed probe is not in the test
+Linux ARM64/Node 22.22.1. P6 repeats this and checks installed complete-tree dispatch
+under both backends with host fetch disabled (Git requires restored PATH). This is
+not an all-platform or Pi/provider-backed end-to-end claim. The explicit installed probe is not in the test
 suite because it may use network for package/grammar acquisition.
 
 Worker/WASM is not a security sandbox or hard RSS cap: external/WASM memory,
@@ -252,15 +257,16 @@ P4 bounds workspace reads/candidate/file translation before allocating blob inpu
 not merely after an unbounded read. P3 projects trusted canonical subtrees from the
 original classified trees without rewriting/reparsing source. P4 bounds downstream
 projection and framing too. P5 captures policy/execution and dispatches finalization;
-P6/P7 user choice and integrated validation still block selectable TSC release.
+P6 adds user choice/display; P7 integrated validation still gates release readiness.
 
 ## P4 complete-tree producer and operational bounds
 
 `normalizeWorkspacePatches(workspace, base, candidates, { backend: "tsc", ... })`
 selects the TSC producer explicitly. The omitted/`agentless` backend preserves the
 existing Agentless key algorithm and return shape. Unknown backend labels reject;
-no automatic backend substitution occurs. This internal API does not make TSC a
-selectable replay policy. P5 separately validates supported captured provenance.
+no automatic backend substitution occurs. This internal API's legacy omitted
+backend behavior is not a user-facing default; the command supplies its explicit
+resolved choice. P5 separately validates supported captured provenance.
 
 `workspaceResourceProfile` in contract.json freezes tightening-only operational
 caps, independently of successful identity provenance. Candidate counts are checked

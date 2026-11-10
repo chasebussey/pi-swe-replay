@@ -25,6 +25,7 @@ function overviewSummary(view: ReplayView): string {
     `RESULT · ${overview.headline}`,
     `Prompt: ${view.prompt ?? "unknown"}`,
     `${view.requestedCount ?? "?"} requested · ${overview.archiveAvailable ? `${new Set(rows.map((row) => row.iteration)).size} completed iterations · regression ${count("passed")} passed / ${count("failed")} failed / ${count("inconclusive")} inconclusive / ${rows.filter((row) => !row.evaluation).length} unavailable` : "iteration results unavailable"}`,
+    `EQUIVALENCE · ${overview.normalizationPolicy ?? "unavailable"}`,
     `VOTING · ${overview.eligibleCount === undefined ? "not recorded" : `${overview.eligibleCount} eligible votes · ${overview.groups.length} patch groups`}`,
     `REGRESSION · baseline ${regression(overview.baseline?.status)} · ${overview.testCommand ?? "command unavailable"} · timeout ${overview.testTimeoutMs === undefined ? "unknown" : `${overview.testTimeoutMs / 60000}m`}`,
     ...patchVoteLines(view),
@@ -37,6 +38,7 @@ function overviewRows(view: ReplayView): Row[] {
   return [
     { value: "result", label: "Result / diagnostics", details: [
       "RESULT DETAILS", overview.headline, ...notes, "",
+      ...(overview.normalizationDetails ?? ["Captured equivalence unavailable."]),
       `Run: ${view.rootEntryId} · ${view.timestamp ?? "timestamp unavailable"}`,
       `Working directory: ${overview.cwd ?? "unavailable"}`,
       `Regression command: ${overview.testCommand ?? "unavailable"}`,
@@ -57,6 +59,7 @@ function overviewRows(view: ReplayView): Row[] {
         `Regression: ${regression(row.evaluation?.status)}`,
         `Patch group: ${row.group ?? "unavailable"} · ${row.vote}`,
         `Candidate: ${row.candidateEntryId}`,
+        ...(row.normalizationDiagnostics ?? []),
         ...(row.evaluation ? [
           `Exit code: ${row.evaluation.exitCode ?? "unavailable"} · duration: ${row.evaluation.durationMs}ms`,
           ...(row.evaluation.error ? [`Error: ${row.evaluation.error}`] : []),
@@ -237,8 +240,8 @@ export class ReplayDashboard implements Component {
     if (!this.list || this.listHeight !== listHeight) this.makeList(listHeight);
     const row = this.rows.find((item) => item.value === this.list?.getSelectedItem()?.value);
     const detail = safeDisplay([
+      ...(this.revealed === undefined ? [] : [this.tab === 0 ? "Regression output (explicitly revealed):" : "Message (explicitly revealed):", this.revealed, ""]),
       row?.details ?? "No entries in this view.",
-      ...(this.revealed === undefined ? [] : ["", this.tab === 0 ? "Regression output (explicitly revealed):" : "Message (explicitly revealed):", this.revealed]),
     ].join("\n"));
     const listWidth = wide ? Math.floor(width * 0.4) : width;
     const detailWidth = wide ? width - listWidth - 3 : width;

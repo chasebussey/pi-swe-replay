@@ -146,9 +146,9 @@ test("historical ordering-risk and differing-global cases remain explicit under 
 
 test("P0 contract pins a distinct structural identity and the adopted residual rule", () => {
   assert.equal(contract.schemaVersion, 1);
-  assert.equal(contract.status, "implementation-contract-not-selectable-policy");
-  assert.deepEqual(contract.choice.values, ["agentless", "tsc"]);
-  assert.equal(contract.choice.default, "agentless");
+  assert.equal(contract.status, "selectable-experimental-policy-pending-integrated-release-validation");
+  assert.deepEqual(contract.choice.values, ["tsc", "agentless"]);
+  assert.equal(contract.choice.default, "tsc");
   assert.equal(contract.choice.cancelBeforeRunCreation, true);
   assert.equal(contract.identity.policy, "complete-tree-tsc-mixed-v1");
   assert.equal(contract.identity.canonicalization, "tsc-canonical-tree-v1");
@@ -213,6 +213,7 @@ test("asset pins and validated worker gates remain distinct from complete replay
   assert.equal(resource.blocksRuntimeEnablement, false);
   assert.equal(contract.implementationGates.find((gate) => gate.id === "upstream-provisioning-installed-location").blocksRuntimeEnablement, false);
   assert.equal(contract.implementationGates.find((gate) => gate.id === "helper-tree-record-integration").blocksRuntimeEnablement, false);
-  assert.equal(contract.implementationGates.find((gate) => gate.id === "user-policy-choice").blocksRuntimeEnablement, true);
+  assert.equal(contract.implementationGates.find((gate) => gate.id === "user-policy-choice").blocksRuntimeEnablement, false);
+  assert.equal(contract.implementationGates.find((gate) => gate.id === "installed-package-offline-assets").blocksRuntimeEnablement, false);
   assert.equal(contract.implementationGates.find((gate) => gate.id === "integrated-replay-validation").blocksRuntimeEnablement, true);
 });
