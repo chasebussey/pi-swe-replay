@@ -59,8 +59,8 @@ function exactSize(file: WorkspaceTreeFile | null): number {
 }
 
 /**
- * Complete-tree TSC producer only. Does not enable run selection or persisted TSC
- * compatibility. Reads retained trees, never HEAD/worktree files, and never returns
+ * Complete-tree TSC producer; policy choice and captured compatibility belong to
+ * the contract/archive layers. Reads retained trees, never HEAD/worktree files, and never returns
  * canonical data as source to restore. One deadline and fatal failure domain cover
  * bounded reads, offline source workers, original-tree projection and hashing.
  */

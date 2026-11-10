@@ -1,12 +1,17 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { unobservedExecution, type ReplayExecution } from "./run-progress";
+import { guardedReplayExecution, type ReplayExecution } from "./run-progress";
 import { trackTurnFiles, type TurnFilesEntry } from "./track-turn-files";
 import { rollUpExplorationStates } from "./exploration-state";
 import { selectExploitationStep } from "./select-step";
 import { ReplayWorkspace, preStepSnapshot, type WorkspaceSnapshot } from "./workspace";
 import { eligibleStepIds, evaluateSnapshot, EVALUATION_TIMEOUT_MS } from "./evaluation";
 import { finalizeReplay, type FinalizedReplay } from "./finalize-run";
-import { appendReplayRecord, type ReplayBaseRecord, type ReplayCandidateRecord, type ReplayEvaluationRecord } from "./replay-records";
+import { appendReplayRecord, type ReplayBaseRecord, type ReplayCandidateRecord, type ReplayEvaluationRecord, type ReplayRootRecordV2 } from "./replay-records";
+import { snapshotNormalization, type ResolvedNormalization } from "./normalization-contract";
+import { TscWorkspaceResourceError } from "./tsc-workspace-limits";
+import type { FinalizationOptions } from "./finalize-run";
+
+export interface SweReplayRunOptions extends ResolvedNormalization, FinalizationOptions {}
 
 interface SweReplayRequest {
   n: number;
@@ -37,17 +42,25 @@ export async function runSweReplay(
   n: number,
   prompt: string,
   testCommand: string,
-  execution: ReplayExecution = unobservedExecution,
+  options: SweReplayRunOptions,
 ): Promise<SweReplayRun> {
   if (!Number.isSafeInteger(n) || n <= 0 || !prompt.trim()) throw new Error("A positive iteration count and prompt are required.");
   if (!testCommand.trim()) throw new Error("A regression test command is required.");
   if (activeRuns.has(ctx.sessionManager)) throw new Error("A SWE-Replay run is already active in this session.");
   if (!ctx.isIdle()) throw new Error("Wait for the agent to become idle before starting SWE-Replay.");
 
+  const normalization = snapshotNormalization(options);
+  const limits = normalization.normalizationExecution;
+  if (limits.backend === "tsc" && n > limits.workspaceLimits.maxCandidates) {
+    throw new TscWorkspaceResourceError("maxCandidates", n, limits.workspaceLimits.maxCandidates);
+  }
+  const execution = guardedReplayExecution(options.execution, ctx.signal);
+  const resolved: SweReplayRunOptions = { ...normalization, execution, grammar: { ...options.grammar } };
+
   activeRuns.add(ctx.sessionManager);
   try {
     execution.assertActive();
-    return await executeReplay(pi, ctx, n, prompt, testCommand, execution);
+    return await executeReplay(pi, ctx, n, prompt, testCommand, resolved, execution);
   } finally {
     activeRuns.delete(ctx.sessionManager);
   }
@@ -55,14 +68,16 @@ export async function runSweReplay(
 
 async function executeReplay(
   pi: ExtensionAPI, ctx: ExtensionCommandContext, n: number, prompt: string, testCommand: string,
-  execution: ReplayExecution,
+  options: SweReplayRunOptions, execution: ReplayExecution,
 ): Promise<SweReplayRun> {
   const { report, assertActive } = execution;
   report({ type: "phase", phase: "preparing" });
   const workspace = await ReplayWorkspace.open(ctx.cwd);
   assertActive();
-  const rootEntryId = appendReplayRecord(pi, ctx, "swe-replay-root", {
-    schemaVersion: 1, prompt, requestedPatchCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS, cwd: ctx.cwd,
+  const { normalizationContract, normalizationExecution } = options;
+  const rootEntryId = appendReplayRecord<ReplayRootRecordV2>(pi, ctx, "swe-replay-root", {
+    schemaVersion: 2, prompt, requestedPatchCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS, cwd: ctx.cwd,
+    normalizationContract, normalizationExecution,
   });
 
   report({ type: "root", rootEntryId });
@@ -72,8 +87,8 @@ async function executeReplay(
   const baseTree = await workspace.contentTree(initial);
   assertActive();
   appendReplayRecord<ReplayBaseRecord>(pi, ctx, "swe-replay-base", {
-    schemaVersion: 1, rootEntryId, requestedCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS,
-    cwd: ctx.cwd, baseTreeOid: baseTree.treeOid, snapshot: initial, tree: baseTree,
+    schemaVersion: 2, rootEntryId, requestedCount: n, testCommand, testTimeoutMs: EVALUATION_TIMEOUT_MS,
+    cwd: ctx.cwd, baseTreeOid: baseTree.treeOid, snapshot: initial, tree: baseTree, normalizationContract, normalizationExecution,
   });
 
   const restore = async (snapshot: WorkspaceSnapshot) => {
@@ -200,7 +215,7 @@ async function executeReplay(
     await evaluate(i);
   }
   assertActive();
-  const final = await finalizeReplay(pi, ctx, workspace, rootEntryId, execution);
+  const final = await finalizeReplay(pi, ctx, workspace, rootEntryId, { execution, grammar: options.grammar });
   return { requestedPatchCount: n, prompt, ...final };
 }
 

@@ -2,9 +2,10 @@
 
 These repository fixtures preserve the reviewed research inputs independently of
 Git-ignored `docs/` and `experiments/`. They contain **desired policy outcomes**, not
-canonical outputs captured from a prototype. P1–P4 implement the canonical core,
-bounded offline workers, helper/residual projection and bounded complete-tree
-identities. There is still no selectable TSC voting policy.
+canonical outputs captured from a prototype. P1–P5 implement the canonical core,
+bounded offline workers, helper/residual projection, complete-tree identities and
+durable policy-aware records/finalization. User-facing policy choice and integrated
+release validation remain P6/P7; slash commands still choose Agentless.
 
 P0 contract: [CONTRACT.md](CONTRACT.md) (behavior/API/persistence/gates) and
 [contract.json](contract.json) (explicit choices, versions and asset pins). These
@@ -81,7 +82,11 @@ and reversed input order. `tests/tsc-patch-normalization.test.mjs` also checks a
 36 pairs as complete-tree hashes, explicit canonical/exact/provenance frames,
 dirty initial baselines, raw paths/modes/existence, paired fallback, pre-read caps
 (with Git trace evidence), deadline/fatal-batch behavior and bounded diagnostics.
-P5 still owns persisted contracts, provenance compatibility and voting integration.
+`tests/normalization-contract.test.mjs` covers frozen contracts, supported captured
+legacy/v2 reads, malformed/mismatched provenance, archive associations and policy-
+isolated voting. Replay execution tests additionally cover actual offline TSC
+finalization/restoration, no-winner, failures and cancellation at persistence/voting.
+P6/P7 retain user-choice, captured-policy display, installed and real-Pi gates.
 
 Research paths in `origin`/`sourceArtifacts` are provenance strings only. Tests and
 runtime must not import/read those ignored locations. No external downloads,

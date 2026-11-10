@@ -3,11 +3,13 @@ import { step, snapshot as turnFiles } from "./replay.mjs";
 
 const jiti = createJiti(import.meta.url, { fsCache: false });
 const { readReplayArchive, completedSelectionInputs } = await jiti.import("../../extensions/swe-replay/replay-records.ts");
+const { resolveNormalization } = await jiti.import("../../extensions/swe-replay/normalization-contract.ts");
+const { capturePatchNormalization } = await jiti.import("../../extensions/swe-replay/normalization-records.ts");
 const { selectFinalPatch } = await jiti.import("../../extensions/swe-replay/final-selection.ts");
 const oid = (n, size = 40) => n.toString(16).padStart(size, "0");
 
 /** Complete persisted evidence; selection is captured by the producer, not the UI. */
-export function overviewArchive({ count = 5, selection = true, restoration = "restored", noWinner = false, normalizationEmpty = false } = {}) {
+export function overviewArchive({ count = 5, selection = true, restoration = "restored", noWinner = false, normalizationEmpty = false, normalization } = {}) {
   const entries = [];
   const add = (id, parentId, customType, data) => {
     entries.push({ id, parentId, timestamp: "2026-01-01T00:00:00Z", type: "custom", customType, data });
@@ -49,12 +51,33 @@ export function overviewArchive({ count = 5, selection = true, restoration = "re
           pyodideVersion: "314.0.7", pythonVersion: "3.14.2", gitDiffPolicy: "fixed-myers-three-context-v1" },
       } });
   }
+  // Construct new v2 fixture records explicitly when requested. This test helper
+  // is not a production migration and never reads historical sessions.
+  const resolved = normalization ? structuredClone(resolveNormalization(normalization)) : undefined;
+  if (resolved) {
+    for (const entry of entries) {
+      if (["swe-replay-root", "swe-replay-base"].includes(entry.customType)) Object.assign(entry.data, { schemaVersion: 2, ...structuredClone(resolved) });
+      if (entry.customType !== "swe-replay-patch-identity") continue;
+      let identity = entry.data.normalization;
+      if (normalization === "tsc") {
+        const { policy: _policy, python: _python, ...patch } = identity;
+        identity = { ...patch, ...resolved.normalizationContract.provenance, diagnosticsTruncated: 0 };
+      }
+      entry.data.schemaVersion = 2;
+      entry.data.normalization = capturePatchNormalization(identity);
+    }
+  }
   if (selection) {
     const parsed = readReplayArchive(entries, "root");
     if (parsed.status !== "available") throw new Error(JSON.stringify(parsed));
     const archive = parsed.archive;
-    const decision = selectFinalPatch(archive.base, completedSelectionInputs(archive), archive.evaluations);
-    add("selection", `identity-${count}`, "swe-replay-final-selection", { ...envelope, baseEntryId: "base",
+    // Test-only construction of legacy captured evidence. Runtime finalization and
+    // completedSelectionInputs intentionally refuse legacy runs; inspection never votes.
+    const candidates = resolved ? completedSelectionInputs(archive) : archive.candidates.map((candidate) => ({ ...candidate,
+      normalization: archive.identities.find((identity) => identity.candidateEntryId === candidate.entryId).normalization }));
+    const decision = selectFinalPatch(archive.base, candidates, archive.evaluations);
+    add("selection", `identity-${count}`, "swe-replay-final-selection", { ...envelope,
+      ...(resolved ? { schemaVersion: 2, normalizationContract: resolved.normalizationContract } : {}), baseEntryId: "base",
       candidateEntryIds: archive.candidates.map((c) => c.entryId), identityEntryIds: archive.identities.map((i) => i.entryId),
       evaluationEntryIds: ["baseline", ...archive.evaluations.map((e) => e.entryId)], decision });
     if (decision.status === "selected" && restoration) {

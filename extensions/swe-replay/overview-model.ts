@@ -1,6 +1,7 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { isConsistentRegressionOutcome } from "./evaluation";
 import type { FinalSelectionDecision } from "./final-selection";
+import { PATCH_IDENTITY_POLICY, sameNormalizationContract } from "./normalization-policy";
 import { parseFinalSelectionRecord, parseRestorationEvidence, positive, record, strings } from "./overview-records";
 import { assertReplayComplete, parseReplayEvaluation, readReplayArchive, type ReplayArchive, type ReplayEvaluationRecord } from "./replay-records";
 
@@ -35,7 +36,8 @@ const sameIds = (value: unknown, ids: string[]) => strings(value) && value.lengt
 
 /** Validate captured decisions, never run normalization or voting during inspection. */
 function capturedDecision(d: FinalSelectionDecision, archive: ReplayArchive): FinalSelectionDecision | undefined {
-  if (d.rootEntryId !== archive.base.rootEntryId || d.baseTreeOid !== archive.base.baseTreeOid) return;
+  const expectedPolicy = archive.base.schemaVersion === 2 ? archive.base.normalizationContract.provenance.policy : PATCH_IDENTITY_POLICY;
+  if (d.rootEntryId !== archive.base.rootEntryId || d.baseTreeOid !== archive.base.baseTreeOid || d.policy.equivalence !== expectedPolicy) return;
 
   try {
     assertReplayComplete(archive);
@@ -191,7 +193,10 @@ export function buildReplayOverview(entries: readonly SessionEntry[], rootEntryI
   const selection = selections[0];
   const payload = parseFinalSelectionRecord(selection.data);
   const hasInvalidEvaluation = view.diagnostics.some((message) => message.startsWith("Ambiguous or mismatched evaluation"));
-  const decision = !hasInvalidEvaluation && selections.length === 1 && payload?.schemaVersion === 1 && payload.rootEntryId === rootEntryId
+  const contractMatches = payload?.schemaVersion === archive.base.schemaVersion
+    && (payload?.schemaVersion === 1 || payload?.schemaVersion === 2 && archive.base.schemaVersion === 2
+      && sameNormalizationContract(payload.normalizationContract, archive.base.normalizationContract));
+  const decision = !hasInvalidEvaluation && selections.length === 1 && payload && contractMatches && payload.rootEntryId === rootEntryId
     && payload.baseEntryId === archive.baseEntryId
     && sameIds(payload.candidateEntryIds, archive.candidates.map((c) => c.entryId))
     && sameIds(payload.identityEntryIds, archive.identities.map((i) => i.entryId))

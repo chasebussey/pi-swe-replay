@@ -1,7 +1,8 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { matchesKey } from "@earendil-works/pi-tui";
 import { ReplayLiveState } from "./live-state";
-import { runSweReplay } from "./run";
+import { runSweReplay, type SweReplayRunOptions } from "./run";
+import { snapshotNormalization } from "./normalization-contract";
 import { buildReplayView } from "./visualization-model";
 import { openLiveConsole } from "./ui/live-console";
 import { safeDisplay } from "./ui/dashboard";
@@ -38,9 +39,11 @@ export class ReplayRunController {
     return true;
   }
 
-  start(ctx: ExtensionCommandContext, n: number, prompt: string, testCommand: string): void {
+  start(ctx: ExtensionCommandContext, n: number, prompt: string, testCommand: string, options: SweReplayRunOptions): void {
     if (this.active) throw new Error("A SWE-Replay run is already active.");
     if (!ctx.isIdle()) throw new Error("Wait for the agent to become idle before starting SWE-Replay.");
+    const normalization = snapshotNormalization(options);
+    const grammar = { ...options.grammar };
     const sessionId = ctx.sessionManager.getSessionId();
     const state = new ReplayLiveState(prompt, n);
     const lifetime = new AbortController();
@@ -178,7 +181,8 @@ export class ReplayRunController {
       let failure: string | undefined;
       try {
         await this.execute(runPi, runCtx, n, prompt, testCommand, {
-          signal: lifetime.signal, assertActive, report: (event) => state.report(event),
+          ...normalization, grammar,
+          execution: { signal: lifetime.signal, assertActive, report: (event) => state.report(event) },
         });
       } catch (error) {
         failure = String(error);

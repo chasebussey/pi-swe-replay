@@ -7,6 +7,7 @@ const jiti = createJiti(import.meta.url, { fsCache: false });
 const { ReplayLiveState } = await jiti.import("../extensions/swe-replay/live-state.ts");
 const { ReplayLiveConsole, openLiveConsole } = await jiti.import("../extensions/swe-replay/ui/live-console.ts");
 const { ReplayRunController } = await jiti.import("../extensions/swe-replay/run-controller.ts");
+const { resolveNormalization } = await jiti.import("../extensions/swe-replay/normalization-contract.ts");
 const theme = { fg: (_token, text) => text };
 const bindings = {
   "app.interrupt": "\x1b", "tui.select.up": "\x1b[A", "tui.select.down": "\x1b[B", "tui.select.confirm": "\r",
@@ -418,7 +419,7 @@ function controllerHarness(execute, t) {
 test("background controller returns immediately, owns prompts/navigation, and releases all guards", async (t) => {
   const gate = deferred();
   const started = deferred();
-  const h = controllerHarness(async (pi, ctx, n, prompt, command, execution) => {
+  const h = controllerHarness(async (pi, ctx, n, prompt, command, { execution }) => {
     execution.report({ type: "iteration", iteration: 1, approach: "explore" });
     pi.sendUserMessage(prompt);
     started.resolve();
@@ -426,10 +427,10 @@ test("background controller returns immediately, owns prompts/navigation, and re
     execution.assertActive();
     assert.deepEqual(await ctx.navigateTree("authorized"), { cancelled: false });
   }, t);
-  assert.equal(h.controller.start(h.ctx, 2, "task", "true"), undefined);
+  assert.equal(h.controller.start(h.ctx, 2, "task", "true", resolveNormalization("agentless")), undefined);
   await started.promise;
   assert.equal(h.controller.isRunning(), true);
-  assert.throws(() => h.controller.start(h.ctx, 2, "task", "true"), /already active/);
+  assert.throws(() => h.controller.start(h.ctx, 2, "task", "true", resolveNormalization("agentless")), /already active/);
   assert.deepEqual(await h.emit("input", { text: "unrelated", source: "interactive" }), [{ action: "handled" }]);
   assert.deepEqual(await h.emit("input", { text: "task", source: "extension" }), [{ action: "handled" }]); // permit consumed once
   assert.deepEqual(await h.emit("input", { text: "unrelated", source: "rpc" }), [{ action: "handled" }]);
@@ -455,13 +456,13 @@ test("background controller returns immediately, owns prompts/navigation, and re
 test("shutdown invalidates detached work before persistence or navigation and disposes UI", async (t) => {
   const gate = deferred();
   let caught;
-  const h = controllerHarness(async (pi, ctx, _n, _prompt, _command, execution) => {
+  const h = controllerHarness(async (pi, ctx, _n, _prompt, _command, { execution }) => {
     await gate.promise;
     assert.equal(execution.signal.aborted, true);
     try { pi.appendEntry("unexpected", {}); } catch (error) { caught = error; }
     await ctx.navigateTree("stale");
   }, t);
-  h.controller.start(h.ctx, 1, "task", "true");
+  h.controller.start(h.ctx, 1, "task", "true", resolveNormalization("agentless"));
   const shutdown = h.emit("session_shutdown", { reason: "reload" });
   gate.resolve();
   await shutdown;
@@ -478,7 +479,7 @@ test("a console mount failure does not expose unrestricted terminal input during
   const gate = deferred();
   const h = controllerHarness(async () => { await gate.promise; }, t);
   h.ctx.ui.custom = () => { throw new Error("mount failed"); };
-  h.controller.start(h.ctx, 1, "task", "true");
+  h.controller.start(h.ctx, 1, "task", "true", resolveNormalization("agentless"));
   assert.equal(h.controller.isRunning(), true);
   assert.match(h.notices[0].message, /console unavailable/);
   for (const handler of h.terminalHandlers) assert.deepEqual(handler("/reload\r"), { consume: true });
@@ -487,9 +488,31 @@ test("a console mount failure does not expose unrestricted terminal input during
   assert.equal(h.terminalHandlers.size, 0);
 });
 
+test("controller threads a frozen explicit policy/execution contract without supplying a backend default", async (t) => {
+  const gate = deferred();
+  let received;
+  const h = controllerHarness(async (_pi, _ctx, _n, _prompt, _command, options) => {
+    received = options;
+    await gate.promise;
+  }, t);
+  const supplied = structuredClone(resolveNormalization("tsc", { timeoutMs: 12345 }));
+  h.controller.start(h.ctx, 1, "task", "true", supplied);
+  supplied.normalizationContract.backend = "agentless";
+  supplied.normalizationExecution.sourceLimits.maxSources = 1;
+  assert.equal(received.normalizationContract.backend, "tsc");
+  assert.equal(received.normalizationExecution.timeoutMs, 12345);
+  assert.equal(received.normalizationExecution.sourceLimits.maxSources, 512);
+  assert.ok(Object.isFrozen(received.normalizationContract));
+  assert.ok(Object.isFrozen(received.normalizationExecution.sourceLimits));
+  gate.resolve();
+  await h.controller.waitForCompletion();
+  assert.throws(() => h.controller.start(h.ctx, 1, "task", "true", {}), /Invalid or unsupported/);
+  assert.equal(h.controller.isRunning(), false);
+});
+
 test("controller reports executor failures once and restores prompt access", async (t) => {
   const h = controllerHarness(async () => { throw new Error("baseline failed"); }, t);
-  h.controller.start(h.ctx, 1, "task", "false");
+  h.controller.start(h.ctx, 1, "task", "false", resolveNormalization("agentless"));
   await h.controller.waitForCompletion();
   assert.equal(h.controller.isRunning(), false);
   assert.equal(h.notices.length, 1);

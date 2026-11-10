@@ -175,10 +175,12 @@
     }
   ],
   "implementationGates": [
-    { "id": "resource-profile", "owner": "P5", "status": "bounded-complete-tree-validated-pending-captured-execution", "blocksRuntimeEnablement": true },
+    { "id": "resource-profile", "owner": "P5", "status": "bounded-complete-tree-and-captured-execution-validated", "blocksRuntimeEnablement": false },
     { "id": "interpolation-adapters", "owner": "P1/P2", "status": "core-and-worker-validated", "blocksRuntimeEnablement": false },
     { "id": "installed-package-offline-assets", "owner": "P6", "status": "source-worker-validated-pending-replay-integration", "blocksRuntimeEnablement": true },
     { "id": "upstream-provisioning-installed-location", "supersedes": "grammar-install-hooks", "owner": "P2", "status": "validated-source-api", "blocksRuntimeEnablement": false },
-    { "id": "helper-tree-record-integration", "owner": "P5", "status": "source-and-tree-complete-pending-record-integration", "blocksRuntimeEnablement": true }
+    { "id": "helper-tree-record-integration", "owner": "P5", "status": "v2-contract-archive-and-finalization-validated", "blocksRuntimeEnablement": false },
+    { "id": "user-policy-choice", "owner": "P6", "status": "pending-choice-and-captured-policy-display", "blocksRuntimeEnablement": true },
+    { "id": "integrated-replay-validation", "owner": "P7", "status": "pending-installed-and-real-pi-validation", "blocksRuntimeEnablement": true }
   ]
 }

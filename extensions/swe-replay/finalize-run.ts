@@ -1,13 +1,18 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { selectFinalPatch, type FinalSelectionDecision } from "./final-selection";
-import { normalizeWorkspacePatches } from "./patch-normalization";
+import { normalizeWorkspacePatches, normalizedPatchIdentity, type WorkspaceNormalizationOptions } from "./patch-normalization";
+import { capturePatchNormalization, parsePatchNormalization } from "./normalization-records";
+import { normalizationProvenanceFrame, sameNormalizationContract } from "./normalization-policy";
+import { snapshotNormalization, sameNormalizationExecution } from "./normalization-contract";
+import { TscWorkspaceResourceError } from "./tsc-workspace-limits";
+import type { TscPatchNormalizationOptions } from "./tsc-patch-normalization";
 import {
-  appendReplayRecord, assertReplayComplete, completedSelectionInputs, readReplayArchive,
-  type ReplayArchive, type ReplayFinalSelectionRecord, type ReplayIdentityRecord,
+  appendReplayRecord, assertReplayComplete, assertModernReplayArchive, completedSelectionInputs, readReplayArchive,
+  type ReplayArchive, type ReplayFinalSelectionRecord, type ReplayIdentityPayloadV2,
 } from "./replay-records";
 import { restoreWinner, type WinnerRestoration } from "./restore-winner";
-import { unobservedExecution, type ReplayExecution } from "./run-progress";
-import type { ReplayWorkspace } from "./workspace";
+import { guardedReplayExecution, type ReplayExecution } from "./run-progress";
+import type { ReplayWorkspace, WorkspaceContentTree } from "./workspace";
 
 export interface FinalizedReplay {
   selectionEntryId: string;
@@ -23,11 +28,18 @@ function archiveAt(ctx: ExtensionCommandContext, rootEntryId: string): ReplayArc
   return result.archive;
 }
 
+export interface FinalizationOptions {
+  execution?: ReplayExecution;
+  /** Host/cache settings only; captured execution and policy never come from here. */
+  grammar?: TscPatchNormalizationOptions["grammar"];
+}
+
 /** Called only after the requested generation/evaluation loop completes. */
 export async function finalizeReplay(
   pi: ExtensionAPI, ctx: ExtensionCommandContext, workspace: ReplayWorkspace, rootEntryId: string,
-  execution: ReplayExecution = unobservedExecution,
+  options: FinalizationOptions = {},
 ): Promise<FinalizedReplay> {
+  const execution = guardedReplayExecution(options.execution, ctx.signal);
   let phase = "archive";
   let selection: FinalSelectionDecision;
   let selectionEntryId: string;
@@ -40,33 +52,62 @@ export async function finalizeReplay(
     // Validate completion BEFORE spending normalization work. Identity records do
     // not exist yet; all other associations are already durable across branches.
     assertReplayComplete(archive);
+    assertModernReplayArchive(archive);
+    if (archive.identities.length) throw new Error("Replay identities already exist; captured runs cannot be automatically regrouped.");
+    const frozenNormalization = snapshotNormalization(archive.base);
+    const { normalizationContract, normalizationExecution } = frozenNormalization;
+    if (normalizationExecution.backend === "tsc" && candidates.length > normalizationExecution.workspaceLimits.maxCandidates) {
+      throw new TscWorkspaceResourceError("maxCandidates", candidates.length, normalizationExecution.workspaceLimits.maxCandidates);
+    }
 
     phase = "normalization";
     execution.report({ type: "phase", phase: "normalizing" });
     ctx.ui.notify("Grouping completed replay patches…", "info");
-    const trees = [];
+    const trees: WorkspaceContentTree[] = [];
     for (const candidate of candidates) {
       execution.assertActive();
       trees.push(await workspace.contentTree(candidate.snapshot));
     }
     execution.assertActive();
-    const normalized = await normalizeWorkspacePatches(workspace, base.tree, trees, { signal: execution.signal ?? ctx.signal });
+    const normalizationOptions: WorkspaceNormalizationOptions = normalizationExecution.backend === "agentless"
+      ? { backend: "agentless", timeoutMs: normalizationExecution.timeoutMs, signal: execution.signal ?? ctx.signal }
+      : { backend: "tsc", timeoutMs: normalizationExecution.timeoutMs, signal: execution.signal ?? ctx.signal,
+          limits: normalizationExecution.sourceLimits, workspaceLimits: normalizationExecution.workspaceLimits, grammar: options.grammar };
+    const normalized = await normalizeWorkspacePatches(workspace, base.tree, trees, normalizationOptions);
     execution.assertActive();
-    // Persist only after the entire batch succeeds. Infrastructure errors cannot
-    // become partial exact-content votes or a partial-run selection.
-    for (const [index, candidate] of candidates.entries()) {
-      appendReplayRecord<ReplayIdentityRecord>(pi, ctx, "swe-replay-patch-identity", {
-        schemaVersion: 1, rootEntryId, candidateEntryId: candidate.entryId, tree: trees[index],
-        normalization: { ...normalized.patches[index], policy: normalized.policy, python: normalized.python },
-      });
+    if (normalized.patches.length !== candidates.length) throw new Error("Incomplete normalization batch.");
+    // Construct every payload before the first append. Never persist partial worker
+    // results or declare a decision after a failed batch/append/archive validation.
+    const identities: ReplayIdentityPayloadV2[] = candidates.map((candidate, index) => ({
+      schemaVersion: 2, rootEntryId, candidateEntryId: candidate.entryId, tree: trees[index],
+      normalization: capturePatchNormalization(normalizedPatchIdentity(normalized, index)),
+    }));
+    const expectedProvenance = JSON.stringify(normalizationProvenanceFrame(normalizationContract.provenance));
+    for (const identity of identities) {
+      const parsed = parsePatchNormalization(identity.normalization, 2);
+      if (!parsed || JSON.stringify(normalizationProvenanceFrame(parsed)) !== expectedProvenance) {
+        throw new Error("Normalization batch does not match the frozen run contract.");
+      }
+    }
+    for (const identity of identities) {
+      execution.assertActive();
+      appendReplayRecord(pi, ctx, "swe-replay-patch-identity", identity);
     }
 
     phase = "selection";
     execution.report({ type: "phase", phase: "voting" });
+    execution.assertActive();
     archive = archiveAt(ctx, rootEntryId);
+    assertModernReplayArchive(archive);
+    if (!sameNormalizationContract(normalizationContract, archive.base.normalizationContract)
+      || !sameNormalizationExecution(normalizationExecution, archive.base.normalizationExecution)) {
+      throw new Error("Frozen normalization contract/execution changed during finalization.");
+    }
     selection = selectFinalPatch(archive.base, completedSelectionInputs(archive), archive.evaluations);
+    execution.assertActive();
     selectionEntryId = appendReplayRecord<ReplayFinalSelectionRecord>(pi, ctx, "swe-replay-final-selection", {
-      schemaVersion: 1, rootEntryId, baseEntryId: archive.baseEntryId,
+      schemaVersion: 2, rootEntryId, baseEntryId: archive.baseEntryId,
+      normalizationContract: archive.base.normalizationContract,
       candidateEntryIds: archive.candidates.map((c) => c.entryId), identityEntryIds: archive.identities.map((i) => i.entryId),
       evaluationEntryIds: [...archive.baselineEntryIds, ...archive.evaluations.map((e) => e.entryId)], decision: selection,
     });

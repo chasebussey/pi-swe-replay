@@ -1,12 +1,12 @@
 # TSC v1 implementation contract (P0)
 
 This specifies the implementation contract, **not selectable TSC voting support**.
-P2 source-level batching/workers, P3 helper/residual projection and P4 complete-tree
-identities with bounded reads are implemented. Captured-record/voting integration
-and user-facing policy choice remain future work.
+P2 source-level batching/workers, P3 helper/residual projection, P4 bounded complete-
+tree identities and P5 captured contracts/archive/finalization are implemented.
+User-facing choice/display and installed/real-Pi release validation remain P6/P7.
 Machine-readable choices/pins: `contract.json`. Test inputs: `source-pairs.json`
 and `helper-pairs.json`. No generated canonical hashes serve as correctness oracles.
-The runtime compatibility owner will remain `normalization-policy.ts`, not these
+The runtime compatibility owner is `normalization-policy.ts`, not these
 fixtures or any ignored research directory.
 
 ## Canonicalization and framing
@@ -117,13 +117,16 @@ Roots/bases capture identical `normalizationContract`:
 
 ```typescript
 type FrozenNormalizationContract =
-  | { schemaVersion: 1; backend: "agentless"; provenance: AgentlessProvenance }
-  | { schemaVersion: 1; backend: "tsc"; provenance: TscProvenance };
+  | { schemaVersion: 1; backend: "agentless"; provenance: AgentlessNormalizationProvenance }
+  | { schemaVersion: 1; backend: "tsc"; provenance: TscNormalizationProvenance };
 ```
 
-These are proposed types, not existing exports. Preserve Agentless's current
-complete-tree/Python provenance values. TSC provenance contains its six labels
-and pinned runtime/grammar assets. Identity v2 data retains tree/hash/empty fields
+These are exported from `normalization-policy.ts`. Agentless provenance retains
+`{ policy, python }` and all existing values. TSC provenance is `{ policy, tsc }`,
+where `tsc` contains the six policy labels and pinned runtime/grammar assets. Shared
+compatibility predicates reject unsupported labels, package versions, hashes,
+grammar ordering and mixed backend fields; comparisons use fixed-position frames,
+not object-key ordering. Identity v2 data retains tree/hash/empty fields
 and bounded diagnostics with a nested provenance discriminant. Final-selection v2
 records capture the same contract; derive/validate decision equivalence label from
 it. Validate contract/provenance associations separately from payload shapes.
@@ -138,6 +141,39 @@ Read supported captured v1 Agentless data through explicit legacy parsers. Do no
 infer modern contracts, migrate keys, retest, regenerate groups, automatically
 finalize old runs or reinterpret unsupported records. Historical captured read
 support is distinct from new-run finalization capability.
+
+`normalization-contract.ts` owns execution validation and immutable snapshots.
+`resolveNormalization(choice, overrides)` requires an explicit choice: command/UI
+code alone supplies the initial Agentless default. `runSweReplay` and controller
+starts receive resolved options, validate/snapshot them before workspace mutation,
+and keep the original prompt unchanged. Agentless execution captures schema v1,
+backend and timeout. TSC execution additionally captures both resource-profile IDs
+and complete tightening-only source/workspace limit objects. Validate requested
+candidate capacity before generation and root/base agreement during archive reads.
+Cache locations/transports are host settings, not captured equivalence provenance.
+The slash command continues to choose Agentless until P6 adds policy-choice input.
+
+`normalization-records.ts` parses unknown identity shapes separately from archive
+ownership/association. V2 identity normalization nests `provenance`; typed parsed
+projections expose those explicit captured values to the backend-neutral voter.
+Legacy v1 identities remain flat Agentless only. Reserved mixed-schema fields,
+unsupported provenance and malformed backend diagnostics are unavailable, not
+inferred or migrated. Duplicate identity associations are ambiguous even for an
+excluded candidate. Candidate/evaluation/restoration version checks remain v1.
+
+Finalization requires a complete modern archive, snapshots its captured execution,
+dispatches the chosen backend exactly once, preconstructs and validates the entire
+identity batch, then appends it. It refuses existing identities rather than
+regrouping captured outcomes. Selection derives its equivalence label from the
+captured contract and is persisted before original-snapshot restoration. Read-only
+inspection accepts supported captured legacy/v2 records, validates their contracts
+and archive associations, and never recomputes voting or normalization.
+
+Pi appends are individually durable, not a multi-record transaction. A storage
+append failure or interruption can leave a durable identity prefix despite whole-
+batch normalization success; guards stop further writes/selection and automatic
+resumption is refused. This is distinct from normalization failures, which append
+no identities. A restoration failure remains separate from a persisted decision.
 
 ## Deployment and unfulfilled implementation gates
 
@@ -215,8 +251,8 @@ assumed unmodified; parsing input content is distinct from executing those modul
 P4 bounds workspace reads/candidate/file translation before allocating blob inputs,
 not merely after an unbounded read. P3 projects trusted canonical subtrees from the
 original classified trees without rewriting/reparsing source. P4 bounds downstream
-projection and framing too. P5/P6 persisted/user policy integration still blocks
-automatic TSC voting.
+projection and framing too. P5 captures policy/execution and dispatches finalization;
+P6/P7 user choice and integrated validation still block selectable TSC release.
 
 ## P4 complete-tree producer and operational bounds
 
@@ -224,7 +260,7 @@ automatic TSC voting.
 selects the TSC producer explicitly. The omitted/`agentless` backend preserves the
 existing Agentless key algorithm and return shape. Unknown backend labels reject;
 no automatic backend substitution occurs. This internal API does not make TSC a
-selectable replay policy or a supported captured normalization provenance yet.
+selectable replay policy. P5 separately validates supported captured provenance.
 
 `workspaceResourceProfile` in contract.json freezes tightening-only operational
 caps, independently of successful identity provenance. Candidate counts are checked

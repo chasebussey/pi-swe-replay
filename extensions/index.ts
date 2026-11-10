@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { parseSweReplayRequest, runSweReplay } from "./swe-replay/run";
 import { ReplayRunController } from "./swe-replay/run-controller";
 import { showReplayView } from "./swe-replay/ui/show-view";
+import { resolveNormalization } from "./swe-replay/normalization-contract";
 
 /** SWE-Replay commands and read-only inspection. */
 export default function (pi: ExtensionAPI) {
@@ -34,11 +35,13 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Replay cancelled: a regression test command is required.", "info");
         return;
       }
+      // P6 adds the per-run choice UI; this layer alone owns the current default.
+      const normalization = resolveNormalization("agentless");
       if (ctx.mode === "tui") {
-        controller.start(ctx, request.n, request.prompt, testCommand.trim());
+        controller.start(ctx, request.n, request.prompt, testCommand.trim(), normalization);
         return;
       }
-      const run = await runSweReplay(pi, ctx, request.n, request.prompt, testCommand.trim());
+      const run = await runSweReplay(pi, ctx, request.n, request.prompt, testCommand.trim(), normalization);
       if (run.selection.status === "no-valid-candidates") {
         ctx.ui.notify(
           `SWE-Replay completed ${run.requestedPatchCount} iteration(s): no regression-passing, nonempty patch qualified. Workspace and conversation remain at the last iteration.`,

@@ -5,7 +5,7 @@ export const AGENTLESS_REVISION = "5ce5888b9f149beaace393957a55ea8ee46c9f71";
 export const PYODIDE_VERSION = "314.0.7";
 export const BUNDLED_PYTHON_VERSION = "3.14.2";
 
-// TSC producer contracts. Persisted TSC provenance is not supported until P5.
+// TSC producer and captured provenance contracts. Never reinterpret unsupported pins.
 export const TSC_PATCH_IDENTITY_POLICY = "complete-tree-tsc-mixed-v1";
 export const TSC_HELPER_POLICY = "added-helper-residual-v1";
 export const TSC_SOURCE_FALLBACK_POLICY = "lossless-paired-source-v1";
@@ -44,7 +44,7 @@ export function tscSourceProvenance(languages: readonly TscLanguage[]) {
 }
 export type TscSourceProvenance = ReturnType<typeof tscSourceProvenance>;
 
-/** Complete-tree producer contract. Persisted compatibility remains a P5 gate. */
+/** Complete-tree producer and captured provenance contract. */
 export const TSC_PATCH_PROVENANCE = Object.freeze({
   policy: TSC_PATCH_IDENTITY_POLICY,
   canonicalization: TSC_CANONICALIZATION_POLICY,
@@ -55,7 +55,11 @@ export const TSC_PATCH_PROVENANCE = Object.freeze({
   runtime: TSC_RUNTIME_ASSET,
   grammars: TSC_LANGUAGES,
 });
-export type TscPatchProvenance = typeof TSC_PATCH_PROVENANCE;
+export type TscPatchProvenance = Pick<typeof TSC_PATCH_PROVENANCE,
+  "policy" | "canonicalization" | "helpers" | "registry" | "sourceFallback" | "framing"> & {
+  readonly runtime: Pick<typeof TSC_RUNTIME_ASSET, "package" | "version" | "sha256">;
+  readonly grammars: readonly Pick<typeof TSC_LANGUAGES[number], "language" | "package" | "version" | "sha256">[];
+};
 
 export function tscPatchProvenanceFrame(provenance: TscPatchProvenance) {
   return [provenance.policy, provenance.canonicalization, provenance.helpers, provenance.registry,
@@ -74,16 +78,67 @@ export const PYTHON_NORMALIZATION_PROVENANCE = Object.freeze({
 
 export type PythonNormalizationProvenance = typeof PYTHON_NORMALIZATION_PROVENANCE;
 
-export interface NormalizationProvenance {
+export interface AgentlessNormalizationProvenance {
   policy: typeof PATCH_IDENTITY_POLICY;
   python: PythonNormalizationProvenance;
+}
+export interface TscNormalizationProvenance {
+  policy: typeof TSC_PATCH_IDENTITY_POLICY;
+  tsc: TscPatchProvenance;
+}
+export type NormalizationProvenance = AgentlessNormalizationProvenance | TscNormalizationProvenance;
+export type NormalizationChoice = "agentless" | "tsc";
+export type FrozenNormalizationContract =
+  | { readonly schemaVersion: 1; readonly backend: "agentless"; readonly provenance: AgentlessNormalizationProvenance }
+  | { readonly schemaVersion: 1; readonly backend: "tsc"; readonly provenance: TscNormalizationProvenance };
+
+export const AGENTLESS_NORMALIZATION_PROVENANCE: AgentlessNormalizationProvenance = Object.freeze({
+  policy: PATCH_IDENTITY_POLICY, python: PYTHON_NORMALIZATION_PROVENANCE,
+});
+export const TSC_NORMALIZATION_PROVENANCE: TscNormalizationProvenance = Object.freeze({
+  policy: TSC_PATCH_IDENTITY_POLICY, tsc: TSC_PATCH_PROVENANCE,
+});
+
+const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+
+function supportedTsc(value: unknown): value is TscPatchProvenance {
+  if (!object(value) || !object(value.runtime) || !Array.isArray(value.grammars)) return false;
+  const expected = TSC_PATCH_PROVENANCE;
+  for (const key of ["policy", "canonicalization", "helpers", "registry", "sourceFallback", "framing"] as const) {
+    if (value[key] !== expected[key]) return false;
+  }
+  const asset = (actual: unknown, pin: typeof TSC_RUNTIME_ASSET | typeof TSC_LANGUAGES[number]) => object(actual)
+    && actual.package === pin.package && actual.version === pin.version && actual.sha256 === pin.sha256;
+  const grammars = value.grammars;
+  return asset(value.runtime, expected.runtime) && grammars.length === expected.grammars.length
+    && expected.grammars.every((pin, index) => object(grammars[index])
+      && grammars[index].language === pin.language && asset(grammars[index], pin));
+}
+
+/** Fixed-position fingerprint, independent of object field order or diagnostics. */
+export function normalizationProvenanceFrame(value: NormalizationProvenance): readonly unknown[] {
+  if (value.policy === TSC_PATCH_IDENTITY_POLICY) return tscPatchProvenanceFrame(value.tsc);
+  const p = value.python;
+  return [value.policy, p.policy, p.upstreamRevision, p.pyodideVersion, p.pythonVersion, p.gitDiffPolicy];
+}
+
+export function isSupportedNormalizationContract(value: unknown): value is FrozenNormalizationContract {
+  if (!object(value) || value.schemaVersion !== 1 || !isSupportedNormalizationProvenance(value.provenance)) return false;
+  return value.backend === "agentless" && value.provenance.policy === PATCH_IDENTITY_POLICY
+    || value.backend === "tsc" && value.provenance.policy === TSC_PATCH_IDENTITY_POLICY;
+}
+
+export function sameNormalizationContract(a: FrozenNormalizationContract, b: FrozenNormalizationContract): boolean {
+  return a.backend === b.backend && JSON.stringify(normalizationProvenanceFrame(a.provenance)) === JSON.stringify(normalizationProvenanceFrame(b.provenance));
 }
 
 /** Check compatibility only, not the surrounding patch shape or its associations. */
 export function isSupportedNormalizationProvenance(value: unknown): value is NormalizationProvenance {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!object(value)) return false;
+  if (value.policy === TSC_PATCH_IDENTITY_POLICY) return !Object.hasOwn(value, "python") && supportedTsc(value.tsc);
+  if (Object.hasOwn(value, "tsc")) return false;
 
-  const normalization = value as Record<string, unknown>;
+  const normalization = value;
   const python = normalization.python;
   if (normalization.policy !== PATCH_IDENTITY_POLICY
     || !python || typeof python !== "object" || Array.isArray(python)) {

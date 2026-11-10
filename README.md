@@ -377,7 +377,7 @@ Replay state is persisted in custom session entries:
 
 | Entry | Purpose |
 |---|---|
-| `swe-replay-root` | Identifies a replay run and freezes its prompt, iteration count, test command, timeout, and working directory. |
+| `swe-replay-root` | Identifies a replay run and freezes its prompt, iteration count, test command, working directory, normalization policy/provenance, and execution limits. |
 | `swe-replay-base` | Retains the initial snapshot/content tree and frozen execution contract for final selection. |
 | `swe-replay-candidate` | Persists a completed iteration's snapshot and post-trajectory context anchor before evaluation. |
 | `swe-replay-evaluation` | Records validation, explicit candidate association (except baseline), frozen execution contract, and bounded evidence. |
@@ -390,6 +390,14 @@ Replay state is persisted in custom session entries:
 | `swe-replay-workspace-backup` | Retains the current workspace before restoration. |
 | `swe-replay-exploit-log` | Records exploitation selection, candidate groups, and probabilities. |
 | `swe-replay-step-boundary` | Provides a navigation anchor before an assistant step. |
+
+New runs use schema v2 roots, bases, patch identities, and final-selection records.
+Roots/bases capture matching immutable `normalizationContract` and separate
+`normalizationExecution` envelopes; v2 identities nest their captured provenance.
+Candidate, evaluation, and restoration records remain v1. Supported captured v1
+Agentless outcomes remain readable, but are read-only: no automatic normalization,
+regrouping, finalization, contract inference, or historical migration. Unsupported
+or mismatched versions/policies/assets remain unavailable with diagnostics.
 
 The empty continuation trigger is a `swe-replay-continue` custom message. Step-boundary entries let future navigation retain that message: Pi otherwise navigates before user and custom messages.
 
@@ -407,8 +415,11 @@ node --test tests/*.test.mjs
 
 Tests use Node.js’s built-in test runner and `jiti`, without emitting build artifacts. Tests do not establish provider compatibility; use a disposable repository/session for live smoke testing.
 
-The internal Tree-sitter canonicalization core is under development, **not a
-selectable final-voting policy yet**. Its Python/TypeScript tests use pinned,
+The internal Tree-sitter canonicalization (TSC) backend now implements bounded
+complete-tree grouping, durable policy-aware records and finalization dispatch.
+It is **not a user-selectable replay policy yet**: commands still resolve the
+Agentless-compatible default explicitly; per-run choice/display and integrated
+release validation remain pending. Its Python/TypeScript tests use pinned,
 hash-checked offline WASM, preserve literal fragments and original docstring
 ownership, and canonicalize embedded expressions without printing source. Debug
 f-string display prefixes and Python template-string expression metadata remain
@@ -419,8 +430,14 @@ protocol. It snapshots inputs, deduplicates raw sources by language, rechecks as
 bytes before instantiation, and rejects the entire batch on abort, timeout, asset,
 protocol, runtime or resource failure. It never imports candidate source paths.
 Source errors still request exact-content handling, not infrastructure fallback.
-Helper grouping, complete-tree identity assembly and persisted policy selection
-remain separate work; existing replay continues to use Agentless-compatible voting.
+TSC groups identical newly added top-level named Python/TypeScript functions
+independently of placement/order only when the remaining canonical edits also
+match. Duplicate function names disable extraction; unsupported forms remain
+ordered residual code. It subtracts original classified canonical subtrees rather
+than rewriting/reparsing source, preserving original docstring ownership. Full
+complete-tree identities retain raw paths, modes/existence, exact unsupported
+content and paired fallback. This heuristic does not establish semantic equivalence;
+binding/decorator order may matter, and no automatic compilation gate is added.
 The contract/corpus is in [tests/fixtures/tsc](tests/fixtures/tsc/README.md).
 
 The measured `bounded-tsc-sources-v1` profile caps each source at 512 KiB/100,000
@@ -430,7 +447,10 @@ Limits can be tightened but not relaxed per call; successful canonical identitie
 do not include limits, metrics or cache paths. The 256 MiB V8 old-generation guard
 is **not a hard RSS limit**: WASM/external memory, parent validation/allocation,
 Node launch settings and filesystem privileges remain outside a security sandbox.
-P4 must enforce complete-workspace read and candidate/file bounds before allocation.
+The separate `bounded-tsc-workspace-v1` profile now bounds candidate/tree/file
+counts, Git listing output, blob/source/aggregate reads and conservative identity
+framing before the corresponding allocations. Its source reservations can reject
+earlier than the standalone source API, but never change a successful hash.
 
 The internal host-side grammar fetcher now supports **only pinned GitHub release
 WASM assets from the `tree-sitter` organization** (currently Python 0.25.0 and
@@ -442,8 +462,9 @@ files are size/hash-verified and atomically cached under
 also accepts an explicit cache directory and offline-only mode. Cache reads are
 reverified; corrupt/missing offline entries and supported-grammar download failures
 are errors, not permission to change voting policy. Only validated HTTPS GitHub
-asset-CDN redirects are followed. The fetcher is not yet wired to replay commands;
-its tests use mocked transports, with real upstream acquisition checked separately.
+asset-CDN redirects are followed. The programmatic TSC finalization path uses this fetcher; slash commands still
+choose Agentless until the policy-choice milestone. Tests use offline caches or
+mocked transports, with real upstream acquisition checked separately.
 No grammar binaries are bundled into this repository.
 
 Two explicit developer probes are available outside the automatic test suite:
@@ -503,8 +524,14 @@ earliest passing iteration. No eligible candidates produces an explicit no-winne
 result. Decisions capture groups, votes, exclusions, and ties without rerunning
 normalization, tests, or sampling. These are typed internal inputs, not a parser
 or migration for historical session records. `replay-records.ts` separately parses
-explicit v1 archive associations across all branches. `finalize-run.ts` performs
-one normalization batch after completion and persists the decision;
+explicit supported v1/v2 archive associations across all branches. New automatic
+finalization requires a v2 contract and derives its backend, timeout and limits from
+captured execution, not a new default. It refuses existing identities rather than
+regrouping a captured/partial archive. `finalize-run.ts` performs one complete
+normalization batch after completion and constructs/validates all identities before
+appending them and persisting the decision. Pi's individual appends are not a
+multi-record transaction: an append failure or interruption may leave a durable
+identity prefix, but cannot produce a final selection or automatically resume it;
 `restore-winner.ts` then restores the representative and aligns conversation.
 The live console and captured dashboard report outcomes; explicit artifact export
 remains unimplemented.

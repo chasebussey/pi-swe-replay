@@ -1,14 +1,24 @@
 import type { ExtensionAPI, ExtensionCommandContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { RegressionEvaluation } from "./evaluation";
 import type { FinalSelectionCandidate, FinalSelectionDecision, FinalSelectionEvaluation, FinalSelectionScope } from "./final-selection";
-import { isSupportedNormalizationProvenance } from "./normalization-policy";
+import { sameNormalizationContract, normalizationProvenanceFrame, type FrozenNormalizationContract } from "./normalization-policy";
+import { isSupportedResolvedNormalization, sameNormalizationExecution, type ResolvedNormalization } from "./normalization-contract";
+import { parsePatchNormalization, type CapturedPatchNormalization } from "./normalization-records";
 import type { WorkspaceContentTree, WorkspaceSnapshot } from "./workspace";
 
-export interface ReplayBaseRecord extends FinalSelectionScope {
-  schemaVersion: 1;
+export type ReplayBaseRecord = Omit<FinalSelectionScope, "normalizationContract"> & {
   requestedCount: number;
   snapshot: WorkspaceSnapshot;
   tree: WorkspaceContentTree;
+} & ({ schemaVersion: 1; normalizationContract?: never; normalizationExecution?: never } | ({ schemaVersion: 2 } & ResolvedNormalization));
+
+export interface ReplayRootRecordV2 extends ResolvedNormalization {
+  schemaVersion: 2;
+  prompt: string;
+  requestedPatchCount: number;
+  testCommand: string;
+  testTimeoutMs: number;
+  cwd: string;
 }
 
 export interface ReplayCandidateRecord {
@@ -28,23 +38,31 @@ export interface ReplayEvaluationRecord extends RegressionEvaluation {
   cwd: string;
 }
 
+/** Parsed projection; v2 durable payloads use ReplayIdentityPayloadV2 below. */
 export interface ReplayIdentityRecord {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   rootEntryId: string;
   candidateEntryId: string;
   tree: WorkspaceContentTree;
   normalization: FinalSelectionCandidate["normalization"];
 }
 
-export interface ReplayFinalSelectionRecord {
-  schemaVersion: 1;
+export interface ReplayIdentityPayloadV2 {
+  schemaVersion: 2;
+  rootEntryId: string;
+  candidateEntryId: string;
+  tree: WorkspaceContentTree;
+  normalization: CapturedPatchNormalization;
+}
+
+export type ReplayFinalSelectionRecord = {
   rootEntryId: string;
   baseEntryId: string;
   candidateEntryIds: string[];
   identityEntryIds: string[];
   evaluationEntryIds: string[];
   decision: FinalSelectionDecision;
-}
+} & ({ schemaVersion: 1 } | { schemaVersion: 2; normalizationContract: FrozenNormalizationContract });
 
 export interface ArchiveDiagnostic {
   code: string;
@@ -96,28 +114,20 @@ function tree(value: unknown): value is WorkspaceContentTree {
     && typeof t.ref === "string" && t.ref.startsWith("refs/swe-replay/trees/");
 }
 
-function normalization(value: unknown): value is ReplayIdentityRecord["normalization"] {
-  const n = record(value);
-  if (!n || !isSupportedNormalizationProvenance(n)
-    || !oid(n.baseTreeOid) || !oid(n.candidateTreeOid) || typeof n.keyHash !== "string" || !/^[0-9a-f]{64}$/.test(n.keyHash)
-    || typeof n.rawEmpty !== "boolean" || typeof n.normalizationEmpty !== "boolean" || !Array.isArray(n.diagnostics)) return false;
-
-  return n.diagnostics.every((value) => {
-    const d = record(value);
-    return d?.kind === "exact-content-fallback" && text(d.path) && typeof d.message === "string"
-      && ["SyntaxError", "IndentationError", "TabError"].includes(String(d.pythonType));
-  });
+function modernNormalization(data: Record<string, unknown>): ResolvedNormalization | undefined {
+  if (!isSupportedResolvedNormalization(data)) return;
+  return { normalizationContract: data.normalizationContract, normalizationExecution: data.normalizationExecution };
 }
 
 interface ReplayRecordEnvelope extends Record<string, unknown> {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   rootEntryId: string;
 }
 
 function isReplayRecordForRoot(
   data: Record<string, unknown> | undefined, rootEntryId: string,
 ): data is ReplayRecordEnvelope {
-  return data?.schemaVersion === 1 && data.rootEntryId === rootEntryId;
+  return (data?.schemaVersion === 1 || data?.schemaVersion === 2) && data.rootEntryId === rootEntryId;
 }
 
 // Parse payload shapes after the shared envelope check. Run ownership, ancestry,
@@ -129,27 +139,28 @@ function parseBaseRecord(data: ReplayRecordEnvelope): ReplayBaseRecord | undefin
     return;
   }
 
-  return {
-    ...data, snapshot: data.snapshot, tree: data.tree, baseTreeOid: data.baseTreeOid,
-    requestedCount: data.requestedCount, testCommand: data.testCommand,
-    testTimeoutMs: data.testTimeoutMs, cwd: data.cwd,
-  };
+  const common = { ...data, snapshot: data.snapshot, tree: data.tree, baseTreeOid: data.baseTreeOid,
+    requestedCount: data.requestedCount, testCommand: data.testCommand, testTimeoutMs: data.testTimeoutMs, cwd: data.cwd };
+  if (data.schemaVersion === 1) {
+    if (Object.hasOwn(data, "normalizationContract") || Object.hasOwn(data, "normalizationExecution")) return;
+    return { ...common, schemaVersion: 1 };
+  }
+  const normalization = modernNormalization(data);
+  if (normalization) return { ...common, schemaVersion: 2, ...normalization };
 }
 
 function parseCandidateRecord(data: ReplayRecordEnvelope): ReplayCandidateRecord | undefined {
-  if (!positive(data.iteration) || !text(data.terminalEntryId) || !snapshot(data.snapshot)) {
+  if (data.schemaVersion !== 1 || !positive(data.iteration) || !text(data.terminalEntryId) || !snapshot(data.snapshot)) {
     return;
   }
 
-  return { ...data, iteration: data.iteration, terminalEntryId: data.terminalEntryId, snapshot: data.snapshot };
+  return { ...data, schemaVersion: 1, iteration: data.iteration, terminalEntryId: data.terminalEntryId, snapshot: data.snapshot };
 }
 
 function parseIdentityRecord(data: ReplayRecordEnvelope): ReplayIdentityRecord | undefined {
-  if (!text(data.candidateEntryId) || !tree(data.tree) || !normalization(data.normalization)) {
-    return;
-  }
-
-  return { ...data, candidateEntryId: data.candidateEntryId, tree: data.tree, normalization: data.normalization };
+  const normalization = parsePatchNormalization(data.normalization, data.schemaVersion);
+  if (!text(data.candidateEntryId) || !tree(data.tree) || !normalization) return;
+  return { ...data, candidateEntryId: data.candidateEntryId, tree: data.tree, normalization };
 }
 
 /** Payload parser shared by archive selection and read-only evidence display. */
@@ -185,7 +196,7 @@ export function parseReplayEvaluation(value: unknown): ReplayEvaluationRecord | 
 }
 
 /**
- * Parse explicit v1 associations across ALL branches. Never infer candidates from
+ * Parse explicit supported v1/v2 associations across ALL branches. Never infer candidates from
  * current leaves or migrate older runs. Missing identity/evaluation records are
  * allowed here so interrupted candidate capture remains inspectable; completion
  * and selection have stricter requirements below.
@@ -197,8 +208,16 @@ export function readReplayArchive(entries: readonly SessionEntry[], rootEntryId:
   }
   const root = byId.get(rootEntryId);
   const metadata = root?.type === "custom" && root.customType === "swe-replay-root" ? record(root.data) : undefined;
-  if (metadata?.schemaVersion !== 1) {
+  if (metadata?.schemaVersion !== 1 && metadata?.schemaVersion !== 2) {
     return { status: "unavailable", diagnostics: [{ code: "unsupported-or-missing-root", entryId: rootEntryId }] };
+  }
+  if (metadata.schemaVersion === 1 && (Object.hasOwn(metadata, "normalizationContract") || Object.hasOwn(metadata, "normalizationExecution"))) {
+    return { status: "unavailable", diagnostics: [{ code: "mixed-legacy-normalization-contract", entryId: rootEntryId }] };
+  }
+  const rootNormalization = metadata.schemaVersion === 2 ? modernNormalization(metadata) : undefined;
+  if (metadata.schemaVersion === 2 && (!rootNormalization || !text(metadata.prompt) || !metadata.prompt.trim() || !positive(metadata.requestedPatchCount)
+    || !text(metadata.testCommand) || !metadata.testCommand.trim() || !positive(metadata.testTimeoutMs) || !text(metadata.cwd))) {
+    return { status: "unavailable", diagnostics: [{ code: "invalid-root-normalization-contract", entryId: rootEntryId }] };
   }
 
   const diagnostics: ArchiveDiagnostic[] = [];
@@ -245,7 +264,12 @@ export function readReplayArchive(entries: readonly SessionEntry[], rootEntryId:
     }
     if (entry.customType === "swe-replay-base") {
       const base = parseBaseRecord(data);
-      if (!base || base.snapshot.rootEntryId !== rootEntryId || base.snapshot.stepId !== rootEntryId
+      if (base?.schemaVersion === 2 && rootNormalization && (!sameNormalizationContract(base.normalizationContract, rootNormalization.normalizationContract)
+        || !sameNormalizationExecution(base.normalizationExecution, rootNormalization.normalizationExecution))) {
+        issue("base-normalization-contract-mismatch", entry.id);
+        continue;
+      }
+      if (!base || base.schemaVersion !== metadata.schemaVersion || base.snapshot.rootEntryId !== rootEntryId || base.snapshot.stepId !== rootEntryId
         || base.tree.rootEntryId !== rootEntryId || base.tree.snapshotOid !== base.snapshot.oid
         || base.baseTreeOid !== base.tree.treeOid || base.requestedCount !== metadata.requestedPatchCount
         || base.testCommand !== metadata.testCommand || base.testTimeoutMs !== metadata.testTimeoutMs
@@ -267,7 +291,7 @@ export function readReplayArchive(entries: readonly SessionEntry[], rootEntryId:
       candidates.push({ ...candidate, entryId: entry.id });
     } else if (entry.customType === "swe-replay-patch-identity") {
       const identity = parseIdentityRecord(data);
-      if (!identity) {
+      if (!identity || identity.schemaVersion !== metadata.schemaVersion) {
         issue("invalid-or-unsupported-patch-identity", entry.id);
         continue;
       }
@@ -303,8 +327,15 @@ export function readReplayArchive(entries: readonly SessionEntry[], rootEntryId:
     const candidate = candidateById.get(e.candidateEntryId);
     if (!candidate || !ancestor(e.entryId, candidate.entryId)) issue("invalid-evaluation-link", e.entryId);
   }
+  const identityCandidates = new Set<string>();
   for (const identity of identities) {
+    if (identityCandidates.has(identity.candidateEntryId)) issue("ambiguous-patch-identities", identity.entryId);
+    identityCandidates.add(identity.candidateEntryId);
     const candidate = candidateById.get(identity.candidateEntryId);
+    if (rootNormalization && JSON.stringify(normalizationProvenanceFrame(identity.normalization))
+      !== JSON.stringify(normalizationProvenanceFrame(rootNormalization.normalizationContract.provenance))) {
+      issue("identity-normalization-contract-mismatch", identity.entryId);
+    }
     if (!candidate || identity.tree.rootEntryId !== rootEntryId || identity.tree.snapshotOid !== candidate.snapshot.oid
       || identity.tree.treeOid !== identity.normalization.candidateTreeOid
       || identity.normalization.baseTreeOid !== base?.baseTreeOid) issue("invalid-identity-link", identity.entryId);
@@ -328,9 +359,15 @@ export function assertReplayComplete(archive: ReplayArchive): void {
   }
 }
 
-/** Automatic finalization only: no partial-run selection and no new regression execution. */
+/** New automatic work must never normalize/finalize supported legacy captured runs. */
+export function assertModernReplayArchive(archive: ReplayArchive): asserts archive is ReplayArchive & { base: ReplayBaseRecord & { schemaVersion: 2 } } {
+  if (archive.base.schemaVersion !== 2) throw new Error("Legacy captured replay runs are read-only; automatic finalization requires a v2 contract.");
+}
+
+/** Automatic selection inputs: completion remains shared with read-only validation. */
 export function completedSelectionInputs(archive: ReplayArchive): FinalSelectionCandidate[] {
   assertReplayComplete(archive);
+  assertModernReplayArchive(archive);
 
   return archive.candidates.map((candidate) => {
     const identities = archive.identities.filter((identity) => identity.candidateEntryId === candidate.entryId);

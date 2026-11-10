@@ -64,7 +64,7 @@ async function repo(t) {
 }
 const file = (path, content, mode = "100644") => ({ path, content, mode });
 
-test("TSC complete-tree frame pins all provenance and base tree without enabling persisted compatibility", async (t) => {
+test("TSC complete-tree frame pins all provenance and base tree with supported captured compatibility", async (t) => {
   const { base, normalize } = await repo(t);
   const result = await normalize([base]);
   assert.equal(TSC_WORKSPACE_RESOURCE_PROFILE, contract.workspaceResourceProfile.name);
@@ -80,7 +80,7 @@ test("TSC complete-tree frame pins all provenance and base tree without enabling
   assert.equal(result.patches[0].keyHash, expected);
   assert.equal(result.patches[0].rawEmpty, true);
   assert.equal(result.patches[0].normalizationEmpty, true);
-  assert.equal(policy.isSupportedNormalizationProvenance(result), false, "P5 is still required");
+  assert.equal(policy.isSupportedNormalizationProvenance(result), true, "P5 validates the complete pinned provenance");
 });
 
 test("canonical content frame is explicit and distinct from exact bytes and metadata", async (t) => {

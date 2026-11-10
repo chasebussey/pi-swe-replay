@@ -7,9 +7,11 @@ const jiti = createJiti(import.meta.url, { fsCache: false });
 const { readReplayArchive, assertReplayComplete, completedSelectionInputs, appendReplayRecord } = await jiti.import("../extensions/swe-replay/replay-records.ts");
 const { finalizeReplay } = await jiti.import("../extensions/swe-replay/finalize-run.ts");
 const { selectFinalPatch } = await jiti.import("../extensions/swe-replay/final-selection.ts");
+const { resolveNormalization } = await jiti.import("../extensions/swe-replay/normalization-contract.ts");
+const { capturePatchNormalization } = await jiti.import("../extensions/swe-replay/normalization-records.ts");
 const oid = (n, size = 40) => n.toString(16).padStart(size, "0");
 
-function fixture() {
+function fixture({ legacy = false } = {}) {
   const entries = [];
   const add = (id, parentId, customType, data) => {
     const entry = { id, parentId, timestamp: "2026-01-01T00:00:00.000Z", type: "custom", customType, data };
@@ -50,13 +52,23 @@ function fixture() {
       },
     });
   }
+  if (!legacy) {
+    const normalization = structuredClone(resolveNormalization("agentless"));
+    for (const entry of entries) {
+      if (["swe-replay-root", "swe-replay-base"].includes(entry.customType)) Object.assign(entry.data, { schemaVersion: 2, ...normalization });
+      if (entry.customType === "swe-replay-patch-identity") {
+        entry.data.schemaVersion = 2;
+        entry.data.normalization = capturePatchNormalization(entry.data.normalization);
+      }
+    }
+  }
   return { entries, entry: (id) => entries.find((e) => e.id === id) };
 }
 
 const codes = (result) => result.diagnostics.map((d) => d.code);
 const read = (entries) => readReplayArchive(entries, "root");
 
-test("append-only v1 associations round-trip across archived branches without leaf or storage-order inference", () => {
+test("append-only v2 associations round-trip across archived branches without leaf or storage-order inference", () => {
   const { entries } = fixture();
   const result = read(JSON.parse(JSON.stringify(entries)).reverse());
   assert.equal(result.status, "available");
@@ -81,7 +93,7 @@ test("legacy or unsupported runs are unavailable rather than automatically migra
   const { entries, entry } = fixture();
   delete entry("root").data.schemaVersion;
   assert.deepEqual(codes(read(entries)), ["unsupported-or-missing-root"]);
-  entry("root").data.schemaVersion = 2;
+  entry("root").data.schemaVersion = 3;
   assert.deepEqual(codes(read(entries)), ["unsupported-or-missing-root"]);
   assert.deepEqual(codes(read([])), ["unsupported-or-missing-root"]);
 });
@@ -121,9 +133,9 @@ test("candidate snapshots and normalization trees must have explicit, exact asso
 
 test("malformed and unsupported normalization/evaluation fields have specific diagnostics", () => {
   for (const change of [
-    (f) => { f.entry("identity-1").data.normalization.policy = "future"; },
+    (f) => { f.entry("identity-1").data.normalization.provenance.policy = "future"; },
     ...["policy", "upstreamRevision", "pyodideVersion", "pythonVersion", "gitDiffPolicy"].map((field) =>
-      (f) => { f.entry("identity-1").data.normalization.python[field] = "future"; }),
+      (f) => { f.entry("identity-1").data.normalization.provenance.python[field] = "future"; }),
     (f) => { f.entry("identity-1").data.normalization.diagnostics = [{ kind: "unknown" }]; },
     (f) => { f.entry("identity-1").data.normalization.keyHash = "broken"; },
   ]) {
@@ -194,8 +206,9 @@ test("typed payload parsing preserves extra fields and absent optional execution
   assert.deepEqual(archive.base, { ...entry("base").data, entryId: "base" });
   assert.deepEqual(archive.candidates.find((record) => record.entryId === "candidate-1"),
     { ...entry("candidate-1").data, entryId: "candidate-1" });
+  const captured = entry("identity-1").data;
   assert.deepEqual(archive.identities.find((record) => record.entryId === "identity-1"),
-    { ...entry("identity-1").data, entryId: "identity-1" });
+    { ...captured, normalization: { ...captured.normalization, ...captured.normalization.provenance }, entryId: "identity-1" });
   assert.deepEqual(archive.evaluations.find((record) => record.entryId === "evaluation-1").evaluation, evidence);
 });
 

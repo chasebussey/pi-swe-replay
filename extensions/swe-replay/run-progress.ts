@@ -19,3 +19,13 @@ export interface ReplayExecution {
 }
 
 export const unobservedExecution: ReplayExecution = { assertActive() {}, report() {} };
+
+/** A direct caller's context signal still guards persistence/navigation without a controller. */
+export function guardedReplayExecution(execution: ReplayExecution = unobservedExecution, fallbackSignal?: AbortSignal): ReplayExecution {
+  const signal = execution.signal ?? fallbackSignal;
+  return {
+    signal,
+    assertActive() { execution.assertActive(); signal?.throwIfAborted(); },
+    report(event) { execution.report(event); },
+  };
+}

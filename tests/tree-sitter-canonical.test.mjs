@@ -69,7 +69,7 @@ test("core framing retains containers, fields and anonymous operator terminals",
   assert.deepEqual(normalize("typescript", "// only comment\n").source, ["source", "utf8", ["node", "program", []]]);
 });
 
-test("shared registry pins match the P0 contract without enabling persisted TSC compatibility", () => {
+test("shared registry pins match the contract and partial provenance cannot establish compatibility", () => {
   assert.equal(policy.TSC_CANONICALIZATION_POLICY, contract.identity.canonicalization);
   assert.equal(policy.TSC_REGISTRY_POLICY, contract.identity.registry);
   for (const pin of [policy.TSC_RUNTIME_ASSET, ...policy.TSC_LANGUAGES]) {

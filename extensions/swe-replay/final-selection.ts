@@ -1,6 +1,7 @@
 import { isConsistentRegressionOutcome, type RegressionEvaluation } from "./evaluation";
-import type { PatchNormalizationResult } from "./patch-normalization";
-import { isSupportedNormalizationProvenance, PATCH_IDENTITY_POLICY } from "./normalization-policy";
+import type { NormalizedPatchIdentity } from "./patch-normalization";
+import { isSupportedNormalizationProvenance, isSupportedNormalizationContract, normalizationProvenanceFrame,
+  PATCH_IDENTITY_POLICY, type FrozenNormalizationContract, type NormalizationProvenance } from "./normalization-policy";
 import type { WorkspaceSnapshot } from "./workspace";
 
 export const FINAL_VOTING_POLICY = "passing-candidate-occurrences-v1";
@@ -11,6 +12,8 @@ export interface FinalSelectionScope {
   testCommand: string;
   testTimeoutMs: number;
   cwd: string;
+  /** Absent only in legacy typed projections; automatic finalization requires v2. */
+  normalizationContract?: FrozenNormalizationContract;
 }
 
 /** Explicit completed-iteration input, not a persisted-entry schema or a tree leaf. */
@@ -20,10 +23,7 @@ export interface FinalSelectionCandidate {
   iteration: number;
   terminalEntryId: string;
   snapshot: WorkspaceSnapshot;
-  normalization: PatchNormalizationResult["patches"][number] & {
-    policy: PatchNormalizationResult["policy"];
-    python: PatchNormalizationResult["python"];
-  };
+  normalization: NormalizedPatchIdentity;
 }
 
 /** The future persistence adapter must establish this append-only association. */
@@ -66,7 +66,7 @@ interface FinalSelectionDecisionBase {
   baseTreeOid: string;
   policy: {
     voting: typeof FINAL_VOTING_POLICY;
-    equivalence: typeof PATCH_IDENTITY_POLICY;
+    equivalence: NormalizationProvenance["policy"];
     tieBreak: "earliest-passing-iteration";
   };
   candidates: {
@@ -96,12 +96,13 @@ const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 
 function candidateKey(candidate: FinalSelectionCandidate): string {
   const { snapshot: s, normalization: n } = candidate;
-  const p = n.python;
-  // Diagnostics and record IDs are not occurrence identity. No object-key-order dependence.
+  // Unsupported provenance has no valid occurrence identity and is excluded below.
+  // Diagnostics never affect fingerprints, including for rejected typed inputs.
+  const declaredPolicy = n.policy;
+  const provenance = isSupportedNormalizationProvenance(n) ? normalizationProvenanceFrame(n) : ["unsupported", declaredPolicy];
   return JSON.stringify([candidate.rootEntryId, candidate.iteration, candidate.terminalEntryId,
     s.rootEntryId, s.stepId, s.oid, s.ref, n.baseTreeOid, n.candidateTreeOid,
-    n.policy, p.policy, p.upstreamRevision, p.pyodideVersion, p.pythonVersion, p.gitDiffPolicy,
-    n.keyHash, n.rawEmpty, n.normalizationEmpty]);
+    provenance, n.keyHash, n.rawEmpty, n.normalizationEmpty]);
 }
 
 function evaluationKey(record: FinalSelectionEvaluation): string {
@@ -123,7 +124,10 @@ function candidateExclusions(scope: FinalSelectionScope, c: FinalSelectionCandid
     || typeof n.rawEmpty !== "boolean" || typeof n.normalizationEmpty !== "boolean"
     || (n.rawEmpty && !n.normalizationEmpty)
     || (n.rawEmpty !== (n.baseTreeOid === n.candidateTreeOid))) reasons.push("invalid-candidate");
-  if (!isSupportedNormalizationProvenance(n)) {
+  const expected = scope.normalizationContract?.provenance;
+  if (!isSupportedNormalizationProvenance(n)
+    || (expected ? JSON.stringify(normalizationProvenanceFrame(n)) !== JSON.stringify(normalizationProvenanceFrame(expected))
+      : n.policy !== PATCH_IDENTITY_POLICY)) {
     reasons.push("unsupported-normalization");
   }
   if (n.baseTreeOid !== scope.baseTreeOid) reasons.push("base-tree-mismatch");
@@ -233,7 +237,8 @@ export function selectFinalPatch(
   evaluations: readonly FinalSelectionEvaluation[],
 ): FinalSelectionDecision {
   if (!text(scope.rootEntryId) || !oid(scope.baseTreeOid) || !scope.testCommand.trim()
-    || !text(scope.cwd) || !Number.isFinite(scope.testTimeoutMs) || scope.testTimeoutMs <= 0) {
+    || !text(scope.cwd) || !Number.isFinite(scope.testTimeoutMs) || scope.testTimeoutMs <= 0
+    || (scope.normalizationContract !== undefined && !isSupportedNormalizationContract(scope.normalizationContract))) {
     throw new Error("Invalid final-selection scope.");
   }
 
@@ -325,7 +330,8 @@ export function selectFinalPatch(
   uniqueDiagnostics.sort((a, b) => compareText(JSON.stringify(a), JSON.stringify(b)));
   const decision: FinalSelectionDecisionBase = {
     rootEntryId: scope.rootEntryId, baseTreeOid: scope.baseTreeOid,
-    policy: { voting: FINAL_VOTING_POLICY, equivalence: PATCH_IDENTITY_POLICY, tieBreak: "earliest-passing-iteration" },
+    policy: { voting: FINAL_VOTING_POLICY, equivalence: scope.normalizationContract?.provenance.policy ?? PATCH_IDENTITY_POLICY,
+      tieBreak: "earliest-passing-iteration" },
     candidates: outcomes, groups, eligibleCount: groups.reduce((sum, group) => sum + group.votes, 0),
     tiedGroupKeyHashes: tied.length > 1 ? tied.map((group) => group.keyHash) : [], diagnostics: uniqueDiagnostics,
   };

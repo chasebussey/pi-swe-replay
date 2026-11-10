@@ -6,7 +6,7 @@ import {
   type PythonNormalizationResult,
   type PythonPatchFile,
 } from "./python-normalization";
-import { PATCH_IDENTITY_POLICY, type NormalizationProvenance } from "./normalization-policy";
+import { PATCH_IDENTITY_POLICY, type AgentlessNormalizationProvenance, type TscNormalizationProvenance } from "./normalization-policy";
 import type { ReplayWorkspace, WorkspaceContentTree, WorkspaceTreeFile } from "./workspace";
 import { normalizeTscWorkspacePatches, type TscPatchNormalizationOptions, type TscPatchNormalizationResult } from "./tsc-patch-normalization";
 
@@ -16,7 +16,19 @@ export type WorkspaceNormalizationOptions =
 
 export { PATCH_IDENTITY_POLICY } from "./normalization-policy";
 
-export interface PatchNormalizationResult extends NormalizationProvenance {
+export type NormalizedPatchIdentity =
+  | (PatchNormalizationResult["patches"][number] & AgentlessNormalizationProvenance)
+  | (TscPatchNormalizationResult["patches"][number] & TscNormalizationProvenance);
+
+/** Project a successful whole-batch result without changing either backend's keys. */
+export function normalizedPatchIdentity(
+  result: PatchNormalizationResult | TscPatchNormalizationResult, index: number,
+): NormalizedPatchIdentity {
+  if (result.policy === PATCH_IDENTITY_POLICY) return { ...result.patches[index], policy: result.policy, python: result.python };
+  return { ...result.patches[index], policy: result.policy, tsc: result.tsc };
+}
+
+export interface PatchNormalizationResult extends AgentlessNormalizationProvenance {
   patches: {
     baseTreeOid: string;
     candidateTreeOid: string;

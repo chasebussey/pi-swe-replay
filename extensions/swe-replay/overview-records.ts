@@ -1,5 +1,5 @@
 import { FINAL_SELECTION_EXCLUSIONS, FINAL_VOTING_POLICY } from "./final-selection";
-import { PATCH_IDENTITY_POLICY } from "./normalization-policy";
+import { PATCH_IDENTITY_POLICY, isSupportedNormalizationContract } from "./normalization-policy";
 import type { ReplayFinalSelectionRecord } from "./replay-records";
 
 export function record(value: unknown): Record<string, unknown> | undefined {
@@ -16,10 +16,15 @@ export function parseFinalSelectionRecord(value: unknown): ReplayFinalSelectionR
   const payload = record(value);
   const d = record(payload?.decision);
   const policy = record(d?.policy);
-  if (!payload || payload.schemaVersion !== 1 || !text(payload.rootEntryId) || !text(payload.baseEntryId)
+  if (!payload || (payload.schemaVersion !== 1 && payload.schemaVersion !== 2)
+    || (payload.schemaVersion === 1 && Object.hasOwn(payload, "normalizationContract"))
+    || (payload.schemaVersion === 2 && !isSupportedNormalizationContract(payload.normalizationContract))
+    || !text(payload.rootEntryId) || !text(payload.baseEntryId)
     || !strings(payload.candidateEntryIds) || !strings(payload.identityEntryIds) || !strings(payload.evaluationEntryIds)
     || !d || !text(d.rootEntryId) || typeof d.baseTreeOid !== "string" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(d.baseTreeOid)
-    || policy?.voting !== FINAL_VOTING_POLICY || policy.equivalence !== PATCH_IDENTITY_POLICY
+    || policy?.voting !== FINAL_VOTING_POLICY
+    || policy.equivalence !== (payload.schemaVersion === 2 && isSupportedNormalizationContract(payload.normalizationContract)
+      ? payload.normalizationContract.provenance.policy : PATCH_IDENTITY_POLICY)
     || policy.tieBreak !== "earliest-passing-iteration" || !Array.isArray(d.candidates) || !Array.isArray(d.groups)
     || !Array.isArray(d.diagnostics) || !strings(d.tiedGroupKeyHashes) || !d.tiedGroupKeyHashes.every(hash)
     || typeof d.eligibleCount !== "number" || !Number.isSafeInteger(d.eligibleCount) || d.eligibleCount < 0) return;

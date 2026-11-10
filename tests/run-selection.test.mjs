@@ -1,16 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url, { fsCache: false });
 const { runSweReplay: run } = await jiti.import("../extensions/swe-replay/run.ts");
 const { readReplayArchive, completedSelectionInputs } = await jiti.import("../extensions/swe-replay/replay-records.ts");
 const { ReplayWorkspace } = await jiti.import("../extensions/swe-replay/workspace.ts");
-const runSweReplay = (pi, ctx, n, prompt, command = "true") => run(pi, ctx, n, prompt, command);
+const { resolveNormalization } = await jiti.import("../extensions/swe-replay/normalization-contract.ts");
+const { TSC_LANGUAGES } = await jiti.import("../extensions/swe-replay/normalization-policy.ts");
+const { buildReplayOverview } = await jiti.import("../extensions/swe-replay/overview-model.ts");
+const require = createRequire(import.meta.url);
+
+function tscRunOptions(t, limits) {
+  const cacheDir = mkdtempSync(join(tmpdir(), "replay-run-tsc-cache-"));
+  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  for (const pin of TSC_LANGUAGES) {
+    copyFileSync(join(dirname(require.resolve(`${pin.package}/package.json`)), pin.asset), join(cacheDir, `${pin.sha256}.wasm`));
+  }
+  return { ...resolveNormalization("tsc", limits), grammar: { cacheDir, offline: true, fetch() { throw new Error("Runtime network forbidden"); } } };
+}
+const runSweReplay = (pi, ctx, n, prompt, command = "true") => run(pi, ctx, n, prompt, command, resolveNormalization("agentless"));
 
 function harness(withCandidates, t, { cancelNavigation = false, abortIteration, contents, stopReason = "stop", onTurn } = {}) {
   const cwd = mkdtempSync(join(tmpdir(), "replay-run-test-"));
@@ -180,7 +194,7 @@ test("exploitation restores pre-step context and continues via an empty custom m
 test("live observations distinguish captured candidates, evaluation, and final restoration", async (t) => {
   const h = harness(false, t);
   const events = [];
-  await run(h.pi, h.ctx, 1, "task", "true", { assertActive() {}, report: (event) => events.push(event) });
+  await run(h.pi, h.ctx, 1, "task", "true", { ...resolveNormalization("agentless"), execution: { assertActive() {}, report: (event) => events.push(event) } });
   assert.equal(events[0].phase, "preparing");
   assert.equal(events.find((event) => event.type === "root").rootEntryId, h.entries[0].id);
   const candidate = events.findIndex((event) => event.type === "candidate");
@@ -197,9 +211,11 @@ test("runtime invalidation releases settlement listeners and never finalizes an 
   const lifetime = new AbortController();
   h.pi.sendUserMessage = () => { lifetime.abort(); };
   await assert.rejects(run(h.pi, h.ctx, 1, "task", "true", {
-    signal: lifetime.signal,
-    assertActive() { if (lifetime.signal.aborted) throw new Error("invalidated"); },
-    report() {},
+    ...resolveNormalization("agentless"), execution: {
+      signal: lifetime.signal,
+      assertActive() { if (lifetime.signal.aborted) throw new Error("invalidated"); },
+      report() {},
+    },
   }), /invalidated/);
   assert.equal(records(h, "swe-replay-final-selection").length, 0);
   assert.equal(records(h, "swe-replay-candidate").length, 0);
@@ -581,4 +597,149 @@ test("the command reports selected/restored and no-winner outcomes without expor
     assert.equal(h.entries.filter((e) => e.type === "custom_message").length, 0);
     assert.equal(h.promptCount(), 1);
   }
+});
+
+test("TSC v2 finalization groups location-equivalent helpers and restores the original archived winner/index/context", async (t) => {
+  t.mock.method(Math, "random", () => 0.1);
+  const py = "def helper():\n return 7\n";
+  const ts = "export function helper(){return 7;}\n";
+  const python = [py + "x=2\n", "x=2\n" + py, "x=3\n" + py];
+  const typescript = [ts + "const x=2;\n", "const x=2;\n" + ts, "const x=3;\n" + ts];
+  const h = harness(false, t, { contents: ["same", "same", "other"], onTurn: ({ cwd, prompts }) => {
+    writeFileSync(join(cwd, "a.py"), python[prompts - 1]);
+    writeFileSync(join(cwd, "a.ts"), typescript[prompts - 1]);
+  } });
+  writeFileSync(join(h.ctx.cwd, "a.py"), "x=1\n");
+  writeFileSync(join(h.ctx.cwd, "a.ts"), "const x=1;\n");
+  writeFileSync(join(h.ctx.cwd, "staged-user"), "staged\n");
+  h.git("add", "staged-user");
+  writeFileSync(join(h.ctx.cwd, "staged-user"), "unstaged\n");
+  const index = h.git("write-tree").toString().trim();
+  let evaluations = 0;
+  const exec = h.pi.exec;
+  h.pi.exec = (...args) => { evaluations++; return exec(...args); };
+  const options = tscRunOptions(t);
+  const result = await run(h.pi, h.ctx, 3, "task", "true", options);
+  assert.equal(evaluations, 4, "reuse baseline/candidate evaluations; never retest during finalization");
+  assert.equal(result.selection.policy.equivalence, "complete-tree-tsc-mixed-v1");
+  assert.equal(result.selection.groups[0].votes, 2);
+  assert.equal(result.selection.groups[0].representativeIteration, 1);
+  assert.equal(result.selection.eligibleCount, 3);
+  assert.equal(readFileSync(join(h.ctx.cwd, "a.py"), "utf8"), python[0]);
+  assert.equal(readFileSync(join(h.ctx.cwd, "a.ts"), "utf8"), typescript[0]);
+  assert.equal(h.git("write-tree").toString().trim(), index);
+  assert.equal(readFileSync(join(h.ctx.cwd, "staged-user"), "utf8"), "unstaged\n");
+  const root = records(h, "swe-replay-root")[0];
+  const base = records(h, "swe-replay-base")[0];
+  assert.equal(root.data.schemaVersion, 2);
+  assert.equal(base.data.schemaVersion, 2);
+  assert.deepEqual(root.data.normalizationContract, options.normalizationContract);
+  assert.deepEqual(base.data.normalizationContract, root.data.normalizationContract);
+  assert.deepEqual(base.data.normalizationExecution, root.data.normalizationExecution);
+  for (const identity of records(h, "swe-replay-patch-identity")) {
+    assert.equal(identity.data.schemaVersion, 2);
+    assert.equal(identity.data.normalization.policy, undefined, "durable provenance is nested");
+    assert.deepEqual(identity.data.normalization.provenance, options.normalizationContract.provenance);
+  }
+  assert.ok(records(h, "swe-replay-candidate").every((entry) => entry.data.schemaVersion === 1));
+  assert.ok(records(h, "swe-replay-evaluation").every((entry) => entry.data.schemaVersion === 1));
+  const selected = h.ctx.sessionManager.getBranch();
+  const candidates = records(h, "swe-replay-candidate");
+  assert.ok(selected.some((entry) => entry.id === candidates[0].id));
+  assert.ok(!selected.some((entry) => entry.id === candidates[1].id || entry.id === candidates[2].id));
+  assert.match(buildReplayOverview(h.entries, root.id).headline, /Selected iteration 1.*restored/);
+  assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
+});
+
+test("TSC v2 regression exclusions and no-winner outcomes preserve the existing vote/last-workspace rules", async (t) => {
+  t.mock.method(Math, "random", () => 0.1);
+  const h = harness(false, t, { contents: ["pass", "fail"], onTurn: ({ cwd }) => {
+    writeFileSync(join(cwd, "a.ts"), "export function helper(){return 7;}\n");
+  } });
+  writeFileSync(join(h.ctx.cwd, "a.ts"), "");
+  const result = await run(h.pi, h.ctx, 2, "task", 'test "$(cat a)" != fail', tscRunOptions(t));
+  assert.equal(result.selection.eligibleCount, 1);
+  assert.deepEqual(result.selection.candidates[1].exclusionReasons, ["regression-failed"]);
+  assert.equal(result.selection.groups[0].representativeIteration, 1);
+  const empty = harness(false, t, { contents: ["initial", "initial"], onTurn: ({ cwd, prompts }) => {
+    writeFileSync(join(cwd, "a.py"), prompts === 1 ? "# docs\nx = 1\n" : '"module docs"\nx=1\n');
+  } });
+  writeFileSync(join(empty.ctx.cwd, "a.py"), "x=1\n");
+  const noWinner = await run(empty.pi, empty.ctx, 2, "task", "true", tscRunOptions(t));
+  assert.equal(noWinner.selection.status, "no-valid-candidates");
+  assert.ok(noWinner.selection.candidates.every((candidate) => candidate.exclusionReasons.includes("normalization-empty")));
+  assert.equal(readFileSync(join(empty.ctx.cwd, "a.py"), "utf8"), '"module docs"\nx=1\n');
+  assert.equal(records(empty, "swe-replay-restoration").length, 0);
+});
+
+test("invalid frozen contracts/candidate caps fail before snapshot mutation; TSC batch failure never persists partial identities", async (t) => {
+  const h = harness(false, t);
+  const refs = h.git("show-ref").toString();
+  const invalid = structuredClone(resolveNormalization("tsc"));
+  invalid.normalizationExecution.sourceLimits.maxSources++;
+  await assert.rejects(run(h.pi, h.ctx, 1, "task", "true", invalid), /Invalid or unsupported/);
+  await assert.rejects(run(h.pi, h.ctx, 2, "task", "true", tscRunOptions(t, { workspaceLimits: { maxCandidates: 1 } })), /maxCandidates/);
+  assert.equal(h.entries.length, 0);
+  assert.equal(h.promptCount(), 0);
+  assert.equal(h.git("show-ref").toString(), refs);
+  const failed = harness(false, t, { onTurn: ({ cwd }) => writeFileSync(join(cwd, "a.py"), "x=2\n") });
+  writeFileSync(join(failed.ctx.cwd, "a.py"), "x=1\n");
+  await assert.rejects(run(failed.pi, failed.ctx, 1, "task", "true", tscRunOptions(t, { sourceLimits: { maxSourceNodes: 1 } })), /maxSourceNodes/);
+  assert.equal(records(failed, "swe-replay-candidate").length, 1);
+  assert.equal(records(failed, "swe-replay-evaluation").length, 2);
+  assert.equal(records(failed, "swe-replay-patch-identity").length, 0);
+  assert.equal(records(failed, "swe-replay-final-selection").length, 0);
+  assert.equal(records(failed, "swe-replay-finalization-error")[0].data.phase, "normalization");
+});
+
+test("TSC append failures cannot declare a selection or automatically resume a durable identity prefix", async (t) => {
+  t.mock.method(Math, "random", () => 0.1);
+  const h = harness(false, t, { onTurn: ({ cwd }) => writeFileSync(join(cwd, "a.py"), "x=2\n") });
+  writeFileSync(join(h.ctx.cwd, "a.py"), "x=1\n");
+  const append = h.pi.appendEntry;
+  let identities = 0;
+  h.pi.appendEntry = (type, data) => {
+    if (type === "swe-replay-patch-identity" && ++identities === 2) throw new Error("Session append failed");
+    return append(type, data);
+  };
+  await assert.rejects(run(h.pi, h.ctx, 2, "task", "true", tscRunOptions(t)), /Session append failed/);
+  assert.equal(records(h, "swe-replay-patch-identity").length, 1, "Pi appends are not a multi-record transaction");
+  assert.equal(records(h, "swe-replay-final-selection").length, 0);
+  assert.equal(records(h, "swe-replay-finalization-error")[0].data.phase, "normalization");
+  const { finalizeReplay } = await jiti.import("../extensions/swe-replay/finalize-run.ts");
+  const root = records(h, "swe-replay-root")[0];
+  await assert.rejects(finalizeReplay(h.pi, h.ctx, { contentTree: () => assert.fail("Captured prefixes must not normalize again") }, root.id), /already exist/);
+  assert.equal(records(h, "swe-replay-final-selection").length, 0);
+});
+
+test("TSC context-signal cancellation at identity persistence or voting never creates a final decision", async (t) => {
+  t.mock.method(Math, "random", () => 0.1);
+  for (const boundary of ["identity", "voting"]) {
+    const h = harness(false, t, { onTurn: ({ cwd }) => writeFileSync(join(cwd, "a.py"), "x=2\n") });
+    writeFileSync(join(h.ctx.cwd, "a.py"), "x=1\n");
+    const controller = new AbortController();
+    h.ctx.signal = controller.signal;
+    const append = h.pi.appendEntry;
+    h.pi.appendEntry = (type, data) => {
+      const result = append(type, data);
+      if (boundary === "identity" && type === "swe-replay-patch-identity") controller.abort();
+      return result;
+    };
+    await assert.rejects(run(h.pi, h.ctx, 2, "task", "true", { ...tscRunOptions(t), execution: {
+      assertActive() {}, report(event) { if (boundary === "voting" && event.phase === "voting") controller.abort(); },
+    } }), /abort/i);
+    assert.equal(records(h, "swe-replay-patch-identity").length, boundary === "identity" ? 1 : 2);
+    assert.equal(records(h, "swe-replay-final-selection").length, 0);
+    assert.equal(records(h, "swe-replay-restoration").length, 0);
+    assert.ok([...h.listeners.values()].every((handlers) => handlers.size === 0));
+  }
+});
+
+test("TSC selected decisions survive explicit restoration failure without claiming completion", async (t) => {
+  const h = harness(false, t, { cancelNavigation: true, onTurn: ({ cwd }) => writeFileSync(join(cwd, "a.py"), "x=2\n") });
+  writeFileSync(join(h.ctx.cwd, "a.py"), "x=1\n");
+  await assert.rejects(run(h.pi, h.ctx, 1, "task", "true", tscRunOptions(t)), /selected, but restoration failed/);
+  assert.equal(records(h, "swe-replay-final-selection").length, 1);
+  assert.equal(records(h, "swe-replay-restoration").at(-1).data.status, "failed");
+  assert.equal(records(h, "swe-replay-restoration").some((entry) => entry.data.status === "restored"), false);
 });
