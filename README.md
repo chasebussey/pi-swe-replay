@@ -413,9 +413,52 @@ hash-checked offline WASM, preserve literal fragments and original docstring
 ownership, and canonicalize embedded expressions without printing source. Debug
 f-string display prefixes and Python template-string expression metadata remain
 exact. Invalid source/bytes request lossless fallback; infrastructure errors
-propagate. Bounded worker execution, helper grouping, complete-tree integration,
-persisted policy selection and installed-package validation remain separate work.
-The P0 contract/corpus is in [tests/fixtures/tsc](tests/fixtures/tsc/README.md).
+propagate. The internal `normalizeTscSources` API now provisions approved grammars,
+then runs one disposable offline worker with a typed, bounded request/response
+protocol. It snapshots inputs, deduplicates raw sources by language, rechecks asset
+bytes before instantiation, and rejects the entire batch on abort, timeout, asset,
+protocol, runtime or resource failure. It never imports candidate source paths.
+Source errors still request exact-content handling, not infrastructure fallback.
+Helper grouping, complete-tree identity assembly and persisted policy selection
+remain separate work; existing replay continues to use Agentless-compatible voting.
+The contract/corpus is in [tests/fixtures/tsc](tests/fixtures/tsc/README.md).
+
+The measured `bounded-tsc-sources-v1` profile caps each source at 512 KiB/100,000
+nodes/depth 256, with finite batch, unique-source, canonical-output and message
+limits. The default end-to-end deadline is 60 seconds, including provisioning.
+Limits can be tightened but not relaxed per call; successful canonical identities
+do not include limits, metrics or cache paths. The 256 MiB V8 old-generation guard
+is **not a hard RSS limit**: WASM/external memory, parent validation/allocation,
+Node launch settings and filesystem privileges remain outside a security sandbox.
+P4 must enforce complete-workspace read and candidate/file bounds before allocation.
+
+The internal host-side grammar fetcher now supports **only pinned GitHub release
+WASM assets from the `tree-sitter` organization** (currently Python 0.25.0 and
+TypeScript 0.23.2). It does not use aggregators, mirrors, npm downloads, arbitrary
+URLs, or mutable `latest` releases. Acquisition is separate from offline parsing:
+files are size/hash-verified and atomically cached under
+`$XDG_CACHE_HOME/pi-swe-replay/tsc/grammars`, or
+`~/.cache/pi-swe-replay/tsc/grammars` when XDG_CACHE_HOME is unset. The internal API
+also accepts an explicit cache directory and offline-only mode. Cache reads are
+reverified; corrupt/missing offline entries and supported-grammar download failures
+are errors, not permission to change voting policy. Only validated HTTPS GitHub
+asset-CDN redirects are followed. The fetcher is not yet wired to replay commands;
+its tests use mocked transports, with real upstream acquisition checked separately.
+No grammar binaries are bundled into this repository.
+
+Two explicit developer probes are available outside the automatic test suite:
+
+```bash
+node tests/manual/measure-tsc.mjs
+node tests/manual/tsc-installed-smoke.mjs
+```
+
+The first uses local dev WASM seeds with no network; the second packs into a
+disposable directory, performs a normal production-only npm installation, downloads
+the approved upstream grammars, then checks the installed worker offline after a
+cwd change and with no PATH tools. It may use network for npm and grammar acquisition.
+This passed on Linux ARM64/Node 22.22.1 without installed native grammar packages;
+it is not an all-platform, Pi UI or provider-backed replay validation.
 
 Final selection uses complete-snapshot content trees and retains binary-safe,
 initial-workspace-relative patch export helpers. Selection/restoration are integrated

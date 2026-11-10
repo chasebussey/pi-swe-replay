@@ -215,6 +215,7 @@ test("infrastructure exceptions propagate and parser trees are released on all p
   assert.throws(() => canonicalizeTscSource(undefined, "python", Buffer.from("x=1")), /configured parser/);
   assert.throws(() => canonicalizeTscSource({ parse() { throw new Error("parser failed"); } }, "python", Buffer.from("x=1")), /parser failed/);
   assert.throws(() => canonicalizeTscSource({ parse() { return null; } }, "python", Buffer.from("x=1")), /did not return/);
+  assert.throws(() => canonicalizeTscSource(parsers.get("typescript"), "python", Buffer.from("x=1")), /declared language/);
 
   let deleted = 0;
   for (const source of ["x=1", "def f(:\n pass\n"]) {

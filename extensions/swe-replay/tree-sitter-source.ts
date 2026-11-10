@@ -2,12 +2,13 @@ import { TextDecoder } from "node:util";
 import type { Parser } from "web-tree-sitter";
 import { TSC_LANGUAGES, type TscLanguage } from "./normalization-policy";
 import { canonicalizeSyntaxTree, type CanonicalSyntax, type SyntaxIssue } from "./tree-sitter-canonical";
+import { checkTscLimit, TscTraversalBudget } from "./tree-sitter-limits";
 
 export type CanonicalSource = readonly ["source", "utf8" | "utf8-bom", CanonicalSyntax];
 export type SourceFallbackReason = "unsupported-language" | "invalid-utf8" | "nul-binary"
   | "syntax-error" | "unsupported-trivia";
 export type SourceCanonicalization =
-  | { kind: "canonical"; source: CanonicalSource; removedComments: number; removedDocstrings: number }
+  | { kind: "canonical"; source: CanonicalSource; serializedBytes: number; removedComments: number; removedDocstrings: number }
   | { kind: "exact"; reason: SourceFallbackReason; issues: readonly SyntaxIssue[] };
 
 /** Match raw suffix bytes, never decode or rewrite paths used for identity. */
@@ -28,10 +29,11 @@ export function tscLanguageForPath(path: Uint8Array): TscLanguage | undefined {
  */
 export function canonicalizeTscSource(
   parser: Pick<Parser, "parse"> | undefined, language: TscLanguage | undefined, bytes: Uint8Array,
+  budget = new TscTraversalBudget(),
 ): SourceCanonicalization {
-  if (language === undefined || !TSC_LANGUAGES.some((entry) => entry.language === language)) {
-    return { kind: "exact", reason: "unsupported-language", issues: [] };
-  }
+  checkTscLimit(budget.limits, "maxSourceBytes", bytes.byteLength);
+  const grammar = TSC_LANGUAGES.find((entry) => entry.language === language);
+  if (!grammar) return { kind: "exact", reason: "unsupported-language", issues: [] };
   if (bytes.includes(0)) return { kind: "exact", reason: "nul-binary", issues: [] };
 
   let source: string;
@@ -51,9 +53,14 @@ export function canonicalizeTscSource(
   const tree = parser.parse(source);
   if (!tree) throw new Error("Tree-sitter did not return a parse tree.");
   try {
-    const result = canonicalizeSyntaxTree(tree.rootNode, source, language);
+    const root = tree.rootNode;
+    const result = canonicalizeSyntaxTree(root, source, grammar.language, new Set(), budget);
     if (result.kind === "exact") return result;
-    return { kind: "canonical", source: ["source", encoding, result.root],
+    // Malformed input can have an ERROR root; only a successful parse must match.
+    if (root.type !== grammar.rootType) throw new Error("TSC parser root does not match the declared language.");
+    const serializedBytes = Buffer.byteLength(JSON.stringify(["source", encoding, null])) - 4 + result.serializedBytes;
+    budget.output(serializedBytes);
+    return { kind: "canonical", source: ["source", encoding, result.root], serializedBytes,
       removedComments: result.classification.removedComments,
       removedDocstrings: result.classification.removedDocstrings };
   } finally {

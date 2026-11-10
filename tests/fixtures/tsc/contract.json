@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "p0-contract-not-runtime-support",
+  "status": "implementation-contract-not-selectable-policy",
   "choice": {
     "values": ["agentless", "tsc"],
     "default": "agentless",
@@ -26,11 +26,13 @@
   "languages": [
     {
       "language": "python",
+      "rootType": "module",
       "extensions": [".py"],
       "helpers": ["top-level-named-function-with-body", "async-function", "generator-function", "decorated-function"]
     },
     {
       "language": "typescript",
+      "rootType": "program",
       "extensions": [".ts"],
       "helpers": ["top-level-named-function-with-body", "async-function", "generator-function", "named-export-function"]
     }
@@ -73,11 +75,68 @@
     "infrastructureErrors": "fatal-whole-batch",
     "limitsAffectSuccessfulIdentity": false
   },
+  "resourceProfile": {
+    "name": "bounded-tsc-sources-v1",
+    "scope": "source-worker-batch",
+    "workerProtocolVersion": 1,
+    "defaultTimeoutMs": 60000,
+    "maxTimeoutMs": 60000,
+    "minimumWorkerHeapMb": 64,
+    "minimumWorkerStackMb": 2,
+    "limits": {
+      "maxSources": 512,
+      "maxUniqueSources": 256,
+      "maxPathBytes": 4096,
+      "maxSourceBytes": 524288,
+      "maxBatchBytes": 8388608,
+      "maxUniqueBytes": 4194304,
+      "maxSourceNodes": 100000,
+      "maxBatchNodes": 500000,
+      "maxDepth": 256,
+      "maxSourceCanonicalBytes": 4194304,
+      "maxBatchCanonicalBytes": 16777216,
+      "maxResponseBytes": 50331648,
+      "workerHeapMb": 256,
+      "workerStackMb": 4
+    },
+    "batchByteAccounting": "id-utf8-plus-raw-path-plus-content-including-duplicates",
+    "uniqueByteAccounting": "raw-content-deduplicated-by-language-and-sha256",
+    "overrides": "tighten-only",
+    "candidateFileAndWorkspaceReadBounds": "P4-before-allocation",
+    "memoryCaveat": "not-a-hard-rss-limit-or-security-sandbox"
+  },
+  "trustedCodeLoader": {
+    "package": "jiti", "version": "2.7.0", "fsCache": false,
+    "tryNative": false, "candidatePathsImported": false
+  },
+  "grammarAcquisition": {
+    "policy": "tree-sitter-github-releases-v1",
+    "source": "github-tree-sitter-organization-releases-only",
+    "phase": "host-provisioning-before-offline-normalization",
+    "networkAllowedInProvisioning": true,
+    "mutableLatest": false,
+    "mirrorsOrAggregators": false,
+    "arbitraryUrlConfiguration": false,
+    "cache": "sha256-content-addressed-verified-on-acquisition",
+    "workerMustReverifyLoadedBytes": true,
+    "failure": "fatal-not-exact-content-fallback",
+    "defaultTimeoutMs": 30000,
+    "maxTimeoutMs": 120000,
+    "maxRedirects": 3,
+    "maxRegistryAssetBytes": 8388608,
+    "maxErrorBodyBytes": 2048,
+    "redirectHosts": ["release-assets.githubusercontent.com", "objects.githubusercontent.com"],
+    "sources": [
+      { "language": "python", "repository": "tree-sitter/tree-sitter-python", "releaseTag": "v0.25.0", "asset": "tree-sitter-python.wasm", "bytes": 457883 },
+      { "language": "typescript", "repository": "tree-sitter/tree-sitter-typescript", "releaseTag": "v0.23.2", "asset": "tree-sitter-typescript.wasm", "bytes": 1413849 }
+    ]
+  },
   "dependencies": [
     {
       "package": "web-tree-sitter",
       "version": "0.27.1",
       "asset": "web-tree-sitter.wasm",
+      "bytes": 210415,
       "sha256": "beca80e44cccbf2299ed4d1e3fa6462a9a6fe818aeebf847547a392227ce4acc",
       "license": "MIT"
     },
@@ -97,9 +156,10 @@
     }
   ],
   "implementationGates": [
-    { "id": "resource-profile", "owner": "P2", "status": "pending-measurement", "blocksRuntimeEnablement": true },
-    { "id": "interpolation-adapters", "owner": "P1", "status": "pending-implementation", "blocksRuntimeEnablement": true },
-    { "id": "installed-package-offline-assets", "owner": "P2/P6", "status": "pending-validation", "blocksRuntimeEnablement": true },
-    { "id": "grammar-install-hooks", "owner": "P2/P6", "status": "pending-validation", "blocksRuntimeEnablement": true }
+    { "id": "resource-profile", "owner": "P4", "status": "source-worker-validated-pending-workspace-read-integration", "blocksRuntimeEnablement": true },
+    { "id": "interpolation-adapters", "owner": "P1/P2", "status": "core-and-worker-validated", "blocksRuntimeEnablement": false },
+    { "id": "installed-package-offline-assets", "owner": "P6", "status": "source-worker-validated-pending-replay-integration", "blocksRuntimeEnablement": true },
+    { "id": "upstream-provisioning-installed-location", "supersedes": "grammar-install-hooks", "owner": "P2", "status": "validated-source-api", "blocksRuntimeEnablement": false },
+    { "id": "helper-tree-record-integration", "owner": "P3/P4/P5", "status": "pending", "blocksRuntimeEnablement": true }
   ]
 }

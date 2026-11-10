@@ -20,10 +20,12 @@ runtime/resource errors remain fatal. No upstream regression fallback is adopted
 Reference fixtures and the development oracle are documented separately in
 [`tests/reference/agentless/README.md`](tests/reference/agentless/README.md).
 
-## Tree-sitter canonicalization development dependencies
+## Tree-sitter canonicalization
 
-The core tests use unmodified package-distributed WASM assets, not native grammar
-bindings or host compilers, from:
+The core/worker use unmodified pinned WASM assets, not native grammar bindings or
+host compilers. The runtime is an npm dependency; grammar npm packages are only
+offline development test seeds, while production provisioning uses upstream
+GitHub release assets:
 
 - [web-tree-sitter 0.27.1](https://github.com/tree-sitter/tree-sitter/tree/v0.27.1),
   copyright (c) 2018 Max Brunsfeld;
@@ -35,14 +37,30 @@ bindings or host compilers, from:
   copyright (c) 2017 Max Brunsfeld;
   [MIT notice](licenses/tree-sitter-typescript-MIT.txt).
 
-Versions and WASM hashes are pinned in the core policy definitions and checked by
-tests. These remain development dependencies until bounded-worker/production
-asset integration is implemented. Grammar packages have native install hooks and
-transitive dependencies; scoped `--ignore-scripts` installation was required for
-WASM-only development on the tested Linux ARM64 sandbox. Runtime WASM usage does
-not establish compiler-free package installation on every target. Preserve npm
-package/transitive notices; audit distribution and installed offline loading before
-enabling the new policy. This is not an exhaustive npm dependency license list.
+Versions and WASM hashes are pinned in shared policy definitions, checked by tests,
+and reverified on the exact bytes loaded in each worker. Grammar development
+packages have native install hooks and transitive dependencies; scoped
+`--ignore-scripts` was required for development on the tested Linux ARM64 sandbox.
+They are not runtime dependencies. A packed production-only installation and
+upstream provisioning/offline worker smoke passed without native grammar packages
+or ignore-scripts on that host; this is not an all-platform installation guarantee.
+Preserve dependency/transitive notices. This is not an exhaustive npm license list.
+
+The host-side grammar provisioner now acquires these same pinned grammar bytes
+only from their upstream `tree-sitter` GitHub release assets, verifies hashes and
+caches them locally. It does not bundle grammar binaries or use npm/aggregator
+fetch sources. The grammar copyright/MIT notices above also apply to these acquired
+assets. Provisioning may use the network; parsing is intended to remain offline.
+
+## jiti 2.7.0
+
+[jiti](https://github.com/unjs/jiti) is an unmodified runtime dependency used to load
+only the extension's trusted TypeScript implementation modules inside the plain
+ESM worker. Candidate source paths are never imported/evaluated. Filesystem caching
+and native TypeScript loading are disabled; worker loader/environment flags are
+not inherited. Copyright (c) Pooya Parsa <pooya@pi0.io>, MIT License; the complete
+notice is in [licenses/jiti-MIT.txt](licenses/jiti-MIT.txt), copied from the pinned
+npm package. Preserve the package's bundled/transitive notices when distributing.
 
 ## Pyodide 314.0.7
 

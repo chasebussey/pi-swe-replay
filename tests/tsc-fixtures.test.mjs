@@ -146,7 +146,7 @@ test("historical ordering-risk and differing-global cases remain explicit under 
 
 test("P0 contract pins a distinct structural identity and the adopted residual rule", () => {
   assert.equal(contract.schemaVersion, 1);
-  assert.equal(contract.status, "p0-contract-not-runtime-support");
+  assert.equal(contract.status, "implementation-contract-not-selectable-policy");
   assert.deepEqual(contract.choice.values, ["agentless", "tsc"]);
   assert.equal(contract.choice.default, "agentless");
   assert.equal(contract.choice.cancelBeforeRunCreation, true);
@@ -192,7 +192,7 @@ test("P0 records require new explicit contracts without retroactively selecting 
   assert.equal(contract.persistence.mixedRunPolicies, "reject");
 });
 
-test("P0 pins offline assets and keeps measured limits as an explicit enablement gate", () => {
+test("asset pins and validated worker gates remain distinct from complete replay integration", () => {
   assert.deepEqual(contract.dependencies.map(({ package: name, version, asset }) => [name, version, asset]), [
     ["web-tree-sitter", "0.27.1", "web-tree-sitter.wasm"],
     ["tree-sitter-python", "0.25.0", "tree-sitter-python.wasm"],
@@ -208,7 +208,9 @@ test("P0 pins offline assets and keeps measured limits as an explicit enablement
   assert.equal(contract.execution.infrastructureErrors, "fatal-whole-batch");
   assert.equal(contract.execution.limitsAffectSuccessfulIdentity, false);
   const resource = contract.implementationGates.find((gate) => gate.id === "resource-profile");
-  assert.equal(resource.owner, "P2");
-  assert.equal(resource.status, "pending-measurement");
-  for (const gate of contract.implementationGates) assert.equal(gate.blocksRuntimeEnablement, true, gate.id);
+  assert.equal(resource.owner, "P4");
+  assert.equal(resource.status, "source-worker-validated-pending-workspace-read-integration");
+  assert.equal(resource.blocksRuntimeEnablement, true);
+  assert.equal(contract.implementationGates.find((gate) => gate.id === "upstream-provisioning-installed-location").blocksRuntimeEnablement, false);
+  assert.equal(contract.implementationGates.find((gate) => gate.id === "helper-tree-record-integration").blocksRuntimeEnablement, true);
 });

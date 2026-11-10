@@ -1,6 +1,8 @@
 # TSC v1 implementation contract (P0)
 
-This is a specification for future production implementation, **not runtime support**.
+This specifies the implementation contract, **not selectable TSC voting support**.
+P2 source-level batching/worker support is implemented; helper/complete-tree/record
+integration remains future work.
 Machine-readable choices/pins: `contract.json`. Test inputs: `source-pairs.json`
 and `helper-pairs.json`. No generated canonical hashes serve as correctness oracles.
 The runtime compatibility owner will remain `normalization-policy.ts`, not these
@@ -138,27 +140,77 @@ support is distinct from new-run finalization capability.
 
 ## Deployment and unfulfilled implementation gates
 
-Use the exact dependency/asset pins in contract.json; hashes were checked against
-research assets during P0. Resolve installed package assets, never cwd/experiments.
-Ship trusted worker/adapter runtime code with the package; block runtime network.
-The runtime uses WASM, not native grammar bindings or host Python/compiler.
+Use the exact asset pins in contract.json. Runtime JavaScript/WASM comes from the
+pinned web-tree-sitter package. **User decision D7-R2 supersedes D7-R1's proposed
+bundling and the P0 grammar-npm distribution assumption:** acquire grammars only
+from pinned standalone releases in approved repositories under the GitHub
+`tree-sitter` organization. No aggregator, mirror, configurable URL or `latest`.
+Repository, tag, asset name, exact size and SHA-256 are explicit registry data.
+The Python/TypeScript upstream files have the same bytes as the P1-tested assets.
 
-The grammar packages have `node-gyp-build` install hooks, and the TypeScript
-package depends on tree-sitter-javascript. Research used --ignore-scripts and did
-not validate ordinary installation. P2/P6 must test supported install targets and
-disclose install-time requirements or explicitly revise asset distribution before
-enabling the backend; no universal script-free-install claim. Retain MIT notices
-(Max Brunsfeld: runtime 2018, Python 2016, TypeScript 2017) and audit transitive
-artifacts. Verify package contents and installed-location offline loading.
+Provision in the host before offline normalization; this phase may use the network,
+not the worker. Cache by SHA-256 in the user cache by default (explicit directory
+overrides exist for controlled hosting/tests), verify reads, download into
+unique private temporary files, validate size/hash, then atomically install. Allow
+only checked HTTPS redirects to GitHub release-asset CDN hosts. Never persist
+signed CDN query strings. A supported grammar's acquisition failure is fatal, not
+a source fallback. Unsupported-language file handling remains a separate registry
+choice. Freeze registry/provenance before acquisition, not from a mutable response.
 
-One disposable worker per batch and 60000 ms default end-to-end deadline. Before
-enablement P2 must measure/freeze finite per-file/batch/unique-source bytes,
-candidate/file count, node count, traversal depth, canonical output/message bytes
-and diagnostic limits. Test boundaries, cleanup, abort and hard failures. These
-numeric caps are intentionally not fabricated in P0: `resource-profile` remains
-an explicit blocking implementation gate. Worker/WASM is not a security sandbox
-or hard memory cap; post-parse node checks do not bound parser peak memory.
+The implemented single-grammar API has a 30s default/120s maximum deadline, at most
+three redirects, exact pinned body-size bounds, and HTTP evidence limited to
+2048 raw response bytes.
+It supports offline verified-cache reads, explicit cache directories, repair of
+corrupt entries, abort and concurrent atomic downloads. A returned path is not
+permanent trust: the worker must rehash the bytes it actually loads. Request/return
+metadata is immutable per operation. These are acquisition limits, not the still
+unmeasured normalization resource profile below.
 
-P1 must implement/test interpolation adapters; P2 must validate the resource
-profile; P2/P6 must validate packaging/offline loading and grammar install hooks.
-Completing P0 does not satisfy any of those gates or enable automatic TSC voting.
+Grammar npm packages remain development-only offline test seeds; their native
+install hooks failed on Linux ARM64 without cc, and scoped --ignore-scripts works
+for development. They are not a production grammar source or required native
+binding. No binaries are checked into Git. Retain MIT notices (Max Brunsfeld:
+runtime 2018, Python 2016, TypeScript 2017), audit distribution, and validate the
+installed worker/runtime plus host provisioner path in P2/P6. No host compiler/
+Python or candidate-source execution is needed for WASM normalization.
+
+P2 implements one disposable worker per batch and a 60000 ms default end-to-end
+deadline including provisioning. Parent snapshots/preflights requests before any
+worker start. The measured `bounded-tsc-sources-v1` values are in
+`contract.json.resourceProfile`; callers may tighten but not relax them. Batch byte
+accounting includes IDs, paths and repeated content; unique byte accounting uses
+raw content deduplicated by language/hash. Node/depth limits apply before filtering
+so malformed/ignored syntax cannot bypass them. Core output sizes are calculated
+incrementally before one final serialization, not by repeatedly serializing trees.
+
+Requests/responses have an explicit protocol version, expected source provenance,
+resource profile and ID associations. The worker imports only trusted sibling
+implementation modules with pinned jiti; fsCache/tryNative are disabled. Node/Pi
+loader flags and jiti environment overrides are not inherited. Source paths are
+only registry data; candidate content is never imported/evaluated. Canonical strings,
+original counts and bounded source issues are returned only after the whole batch
+succeeds. Decode/validate the bounded UTF-8 wire result in the parent; do not trust
+unknown records or normalize them into partial results. All paths terminate the
+worker and remove listeners, including early abort/invalid protocol/heap failure.
+Source fallback is data; infrastructure/resource failures reject the whole batch.
+Results/limits/provenance are immutable. Never hash metrics, removal counts, limits,
+cache paths or timestamps into successful canonical identity.
+
+Measurements included 1000/10000-line Python and TypeScript, 19999-line Python just
+under the node cap, over-cap cases, exact/over 512 KiB source size, Unicode literals,
+exact/over depth 256, 512 duplicate sources, unique-count and cumulative-node failure.
+Unit tests cover tightened exact/over node/depth/output/message budgets and failures.
+A packed normal production-only npm install (no ignore-scripts/native grammar deps)
+provisioned upstream assets and ran offline after cwd change with no PATH tools on
+Linux ARM64/Node 22.22.1. This is source-API validation, not an all-platform or Pi/
+provider-backed end-to-end claim. The explicit installed probe is not in the test
+suite because it may use network for package/grammar acquisition.
+
+Worker/WASM is not a security sandbox or hard RSS cap: external/WASM memory,
+post-parse checks, parent validation/allocations, filesystem permissions and Node
+launch settings are outside such a guarantee. V8 heap guards are supplementary
+and may be affected by host launch flags. Trusted installed implementation code is
+assumed unmodified; parsing input content is distinct from executing those modules.
+P4 must bound workspace reads/candidate/file translation before allocating inputs,
+not rely on the worker after an unbounded blob read. P3 helper extraction, P4 tree
+identities and P5/P6 persisted/user policy integration still block automatic voting.

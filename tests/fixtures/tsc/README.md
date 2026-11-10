@@ -2,8 +2,9 @@
 
 These repository fixtures preserve the reviewed research inputs independently of
 Git-ignored `docs/` and `experiments/`. They contain **desired policy outcomes**, not
-canonical outputs captured from a prototype. P1 now implements the source-level
-canonical core; there is still no selectable/bounded production TSC backend.
+canonical outputs captured from a prototype. P2 now implements the source-level
+canonical core and bounded offline worker API; there is still no selectable
+complete-tree TSC voting policy.
 
 P0 contract: [CONTRACT.md](CONTRACT.md) (behavior/API/persistence/gates) and
 [contract.json](contract.json) (explicit choices, versions and asset pins). These
@@ -13,6 +14,9 @@ are implementation specifications, not claims of runtime support.
 - `helper-pairs.json`: 20 historical helper comparisons plus 16 mixed-edit cases
   implementing the user's D8-B decision below.
 - `provenance.json`: promotion/source artifact hashes and original input counts.
+- `contract.json.resourceProfile`: measured source-worker caps, separate from identity.
+- `contract.json.trustedCodeLoader`: pinned trusted implementation loader, not a
+  candidate-source execution facility.
 
 Valid UTF-8 sources are stored as readable text; invalid UTF-8 uses base64. Each
 source carries an encoding tag and SHA-256 checksum to preserve NUL, CRLF, BOM,
@@ -63,10 +67,12 @@ they are expected behavior for implementation, not evidence of implemented suppo
 `tests/tsc-fixtures.test.mjs` validates fixture shape, bytes, checksums, IDs,
 coverage, and decision examples, including the explicit P0 contract and deferred
 enablement gates. It does not normalize candidate code or establish backend
-correctness. `tests/tree-sitter-canonical.test.mjs` now consumes all 71 source
-pairs against real pinned offline WASM and adds original-ownership, interpolation,
-framing, error and cleanup checks. The 36 helper pairs await P3 extraction/grouping;
-P1's node omission API is not an implementation of helper selection.
+correctness. `tests/tree-sitter-canonical.test.mjs` consumes all 71 source pairs against real
+pinned offline WASM. `tests/tree-sitter-normalization.test.mjs` also exercises them
+through disposable workers, protocol/asset failure paths, resource boundaries and
+cleanup. Explicit developer probes live under `tests/manual/` (not automatic tests).
+The 36 helper pairs await P3 extraction/grouping; node omission is groundwork, not
+an implementation of helper selection.
 
 Research paths in `origin`/`sourceArtifacts` are provenance strings only. Tests and
 runtime must not import/read those ignored locations. No external downloads,
