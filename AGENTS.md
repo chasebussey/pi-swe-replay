@@ -336,3 +336,6 @@ summarize the commit, completed scope, remaining gates, actual validation result
 and next useful action. Identify which supporting documents are uncommitted or
 ignored. Do not force-add ignored documents or introduce tracked status files
 without approval.
+
+### Checkpoint commits
+For multi-stage implementations, commit work at major checkpoints.
