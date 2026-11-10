@@ -102,7 +102,26 @@
     "batchByteAccounting": "id-utf8-plus-raw-path-plus-content-including-duplicates",
     "uniqueByteAccounting": "raw-content-deduplicated-by-language-and-sha256",
     "overrides": "tighten-only",
-    "candidateFileAndWorkspaceReadBounds": "P4-before-allocation",
+    "candidateFileAndWorkspaceReadBounds": "bounded-tsc-workspace-v1",
+    "memoryCaveat": "not-a-hard-rss-limit-or-security-sandbox"
+  },
+  "workspaceResourceProfile": {
+    "name": "bounded-tsc-workspace-v1",
+    "scope": "complete-tree-reads-and-identity-framing",
+    "limits": {
+      "maxCandidates": 128,
+      "maxTreeEntries": 100000,
+      "maxTreeListingBytes": 16777216,
+      "maxBatchListingBytes": 67108864,
+      "maxChangedFiles": 256,
+      "maxBatchChangedFiles": 256,
+      "maxBlobBytes": 8388608,
+      "maxReadBytes": 33554432,
+      "maxIdentityBytes": 33554432
+    },
+    "overrides": "tighten-only",
+    "sourceReservations": "conservative-before-read-including-possible-fallbacks-and-identical-shortcuts",
+    "identityBound": "conservative-before-canonical-projection-and-exact-base64-framing",
     "memoryCaveat": "not-a-hard-rss-limit-or-security-sandbox"
   },
   "trustedCodeLoader": {
@@ -156,10 +175,10 @@
     }
   ],
   "implementationGates": [
-    { "id": "resource-profile", "owner": "P4", "status": "source-worker-validated-pending-workspace-read-integration", "blocksRuntimeEnablement": true },
+    { "id": "resource-profile", "owner": "P5", "status": "bounded-complete-tree-validated-pending-captured-execution", "blocksRuntimeEnablement": true },
     { "id": "interpolation-adapters", "owner": "P1/P2", "status": "core-and-worker-validated", "blocksRuntimeEnablement": false },
     { "id": "installed-package-offline-assets", "owner": "P6", "status": "source-worker-validated-pending-replay-integration", "blocksRuntimeEnablement": true },
     { "id": "upstream-provisioning-installed-location", "supersedes": "grammar-install-hooks", "owner": "P2", "status": "validated-source-api", "blocksRuntimeEnablement": false },
-    { "id": "helper-tree-record-integration", "owner": "P3/P4/P5", "status": "pending", "blocksRuntimeEnablement": true }
+    { "id": "helper-tree-record-integration", "owner": "P5", "status": "source-and-tree-complete-pending-record-integration", "blocksRuntimeEnablement": true }
   ]
 }

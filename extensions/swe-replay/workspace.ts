@@ -31,6 +31,15 @@ export interface WorkspaceTreeFile {
   content: Buffer | null;
 }
 
+/** Optional caller-owned caps, checked before changed blobs are materialized. */
+export interface WorkspaceTreeReadBudget {
+  readonly maxListingBytes: number;
+  listing(bytes: number): void;
+  entry(path: Buffer, count: number): void;
+  change(path: Buffer, count: number, beforeMode: string | null, afterMode: string | null): void;
+  blob(path: Buffer, mode: string, size: number, oid: string): void;
+}
+
 export interface WorkspaceTreeChange {
   /** Raw Git path bytes, not a potentially lossy UTF-8 decoding. */
   path: Buffer;
@@ -135,30 +144,37 @@ export class ReplayWorkspace {
   /** Read immutable changes in Git byte-path order, without consulting working-tree files. */
   async treeChanges(
     base: WorkspaceContentTree, candidate: WorkspaceContentTree, signal?: AbortSignal,
+    budget?: WorkspaceTreeReadBudget,
   ): Promise<WorkspaceTreeChange[]> {
     if (base.rootEntryId !== candidate.rootEntryId) {
       throw new Error("Cannot compare content trees from different replay runs.");
     }
 
-    const gitBytes = async (args: string[]) => {
+    const gitBytes = async (args: string[], maxBuffer = 32 * 1024 * 1024) => {
       signal?.throwIfAborted();
       const result = await exec("git", args, {
-        cwd: this.cwd, encoding: "buffer", signal, maxBuffer: 32 * 1024 * 1024,
+        cwd: this.cwd, encoding: "buffer", signal, maxBuffer: Math.max(1, maxBuffer),
       });
       return result.stdout;
     };
     const list = async (treeOid: string) => {
       if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(treeOid)) throw new Error("Invalid content tree OID.");
-      const output = await gitBytes(["ls-tree", "-r", "-z", "--full-tree", treeOid]);
-      const entries = new Map<string, { path: Buffer; mode: string; type: string; oid: string }>();
+      const output = await gitBytes(["ls-tree", "-r", "-z", ...(budget ? ["-l"] : []), "--full-tree", treeOid], budget?.maxListingBytes);
+      budget?.listing(output.length);
+      const entries = new Map<string, { path: Buffer; mode: string; type: string; oid: string; size: number | undefined }>();
       let start = 0;
       while (start < output.length) {
         const end = output.indexOf(0, start);
         const tab = output.indexOf(9, start);
         if (end < 0 || tab < start || tab > end) throw new Error("Malformed Git tree listing.");
-        const [mode, type, oid] = output.subarray(start, tab).toString("ascii").split(" ");
+        const [mode, type, oid, rawSize] = output.subarray(start, tab).toString("ascii").trim().split(/\s+/);
+        const size = budget && type === "blob" ? Number(rawSize) : undefined;
+        if (size !== undefined && (!/^\d+$/.test(rawSize) || !Number.isSafeInteger(size))) {
+          throw new Error("Invalid Git blob size.");
+        }
         const path = output.subarray(tab + 1, end);
-        entries.set(path.toString("base64"), { path, mode, type, oid });
+        budget?.entry(path, entries.size + 1);
+        entries.set(path.toString("base64"), { path, mode, type, oid, size });
         start = end + 1;
       }
       return entries;
@@ -170,16 +186,31 @@ export class ReplayWorkspace {
     paths.sort((a, b) => Buffer.compare(Buffer.from(a, "base64"), Buffer.from(b, "base64")));
     const read = async (entry: ReturnType<typeof before.get>): Promise<WorkspaceTreeFile | null> => {
       if (!entry) return null;
-      const content = entry.type === "blob" ? await gitBytes(["cat-file", "blob", entry.oid]) : null;
+      if (budget && entry.type === "blob") {
+        if (entry.size === undefined) throw new Error("Missing bounded Git blob size.");
+        budget.blob(entry.path, entry.mode, entry.size, entry.oid);
+      }
+      const content = entry.type === "blob"
+        ? await gitBytes(["cat-file", "blob", entry.oid], budget ? entry.size : undefined) : null;
+      if (content !== null && entry.size !== undefined && content.length !== entry.size) {
+        throw new Error("Git blob size changed during immutable read.");
+      }
       return { mode: entry.mode, oid: entry.oid, content };
     };
 
-    const changes: WorkspaceTreeChange[] = [];
-    for (const path of paths) {
+    const changed = paths.filter((path) => {
       const left = before.get(path);
       const right = after.get(path);
-      if (left?.mode === right?.mode && left?.oid === right?.oid) continue;
-      changes.push({ path: Buffer.from(path, "base64"), before: await read(left), after: await read(right) });
+      return left?.mode !== right?.mode || left?.oid !== right?.oid;
+    });
+    for (const [index, path] of changed.entries()) {
+      budget?.change(Buffer.from(path, "base64"), index + 1, before.get(path)?.mode ?? null, after.get(path)?.mode ?? null);
+    }
+
+    const changes: WorkspaceTreeChange[] = [];
+    for (const path of changed) {
+      signal?.throwIfAborted();
+      changes.push({ path: Buffer.from(path, "base64"), before: await read(before.get(path)), after: await read(after.get(path)) });
     }
     return changes;
   }

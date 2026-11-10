@@ -8,6 +8,11 @@ import {
 } from "./python-normalization";
 import { PATCH_IDENTITY_POLICY, type NormalizationProvenance } from "./normalization-policy";
 import type { ReplayWorkspace, WorkspaceContentTree, WorkspaceTreeFile } from "./workspace";
+import { normalizeTscWorkspacePatches, type TscPatchNormalizationOptions, type TscPatchNormalizationResult } from "./tsc-patch-normalization";
+
+export type WorkspaceNormalizationOptions =
+  | (PythonNormalizationOptions & { backend?: "agentless" })
+  | (TscPatchNormalizationOptions & { backend: "tsc" });
 
 export { PATCH_IDENTITY_POLICY } from "./normalization-policy";
 
@@ -59,11 +64,30 @@ function exact(file: WorkspaceTreeFile | null): unknown {
  * from exact byte/mode/existence components. Diagnostics do not affect identity.
  * A hard failure rejects the whole batch; no partial results are returned.
  */
+export function normalizeWorkspacePatches(
+  workspace: ReplayWorkspace, base: WorkspaceContentTree, candidates: readonly WorkspaceContentTree[],
+  options: TscPatchNormalizationOptions & { backend: "tsc" },
+): Promise<TscPatchNormalizationResult>;
+export function normalizeWorkspacePatches(
+  workspace: ReplayWorkspace, base: WorkspaceContentTree, candidates: readonly WorkspaceContentTree[],
+  options?: PythonNormalizationOptions & { backend?: "agentless" },
+): Promise<PatchNormalizationResult>;
+export function normalizeWorkspacePatches(
+  workspace: ReplayWorkspace, base: WorkspaceContentTree, candidates: readonly WorkspaceContentTree[],
+  options: WorkspaceNormalizationOptions,
+): Promise<PatchNormalizationResult | TscPatchNormalizationResult>;
 export async function normalizeWorkspacePatches(
-  workspace: ReplayWorkspace,
-  base: WorkspaceContentTree,
-  candidates: readonly WorkspaceContentTree[],
-  options: PythonNormalizationOptions = {},
+  workspace: ReplayWorkspace, base: WorkspaceContentTree, candidates: readonly WorkspaceContentTree[],
+  options: WorkspaceNormalizationOptions = {},
+): Promise<PatchNormalizationResult | TscPatchNormalizationResult> {
+  if (options.backend === "tsc") return normalizeTscWorkspacePatches(workspace, base, candidates, options);
+  if (options.backend !== undefined && options.backend !== "agentless") throw new TypeError("Unsupported normalization backend.");
+  return normalizeAgentlessWorkspacePatches(workspace, base, candidates, options);
+}
+
+async function normalizeAgentlessWorkspacePatches(
+  workspace: ReplayWorkspace, base: WorkspaceContentTree, candidates: readonly WorkspaceContentTree[],
+  options: PythonNormalizationOptions,
 ): Promise<PatchNormalizationResult> {
   const timeoutMs = options.timeoutMs ?? 60_000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("Normalization timeout must be positive and finite.");

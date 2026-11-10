@@ -208,8 +208,8 @@ test("asset pins and validated worker gates remain distinct from complete replay
   assert.equal(contract.execution.infrastructureErrors, "fatal-whole-batch");
   assert.equal(contract.execution.limitsAffectSuccessfulIdentity, false);
   const resource = contract.implementationGates.find((gate) => gate.id === "resource-profile");
-  assert.equal(resource.owner, "P4");
-  assert.equal(resource.status, "source-worker-validated-pending-workspace-read-integration");
+  assert.equal(resource.owner, "P5");
+  assert.equal(resource.status, "bounded-complete-tree-validated-pending-captured-execution");
   assert.equal(resource.blocksRuntimeEnablement, true);
   assert.equal(contract.implementationGates.find((gate) => gate.id === "upstream-provisioning-installed-location").blocksRuntimeEnablement, false);
   assert.equal(contract.implementationGates.find((gate) => gate.id === "helper-tree-record-integration").blocksRuntimeEnablement, true);

@@ -2,9 +2,9 @@
 
 These repository fixtures preserve the reviewed research inputs independently of
 Git-ignored `docs/` and `experiments/`. They contain **desired policy outcomes**, not
-canonical outputs captured from a prototype. P1–P3 implement the source-level
-canonical core, bounded offline worker API and helper/residual projection; there is still no selectable
-complete-tree TSC voting policy.
+canonical outputs captured from a prototype. P1–P4 implement the canonical core,
+bounded offline workers, helper/residual projection and bounded complete-tree
+identities. There is still no selectable TSC voting policy.
 
 P0 contract: [CONTRACT.md](CONTRACT.md) (behavior/API/persistence/gates) and
 [contract.json](contract.json) (explicit choices, versions and asset pins). These
@@ -77,8 +77,11 @@ original documentation ownership, duplicate/overload guards, unsupported forms,
 full declaration identity, encoding markers and UTF-8 ordering. The helper module
 projects trusted canonical subtrees after original-tree classification; it does
 not reparse residual source. Worker tests also run all 36 pairs across fresh workers
-and reversed input order. P4 still owns complete-tree path/metadata framing, paired
-exact fallback and bounded downstream integration.
+and reversed input order. `tests/tsc-patch-normalization.test.mjs` also checks all
+36 pairs as complete-tree hashes, explicit canonical/exact/provenance frames,
+dirty initial baselines, raw paths/modes/existence, paired fallback, pre-read caps
+(with Git trace evidence), deadline/fatal-batch behavior and bounded diagnostics.
+P5 still owns persisted contracts, provenance compatibility and voting integration.
 
 Research paths in `origin`/`sourceArtifacts` are provenance strings only. Tests and
 runtime must not import/read those ignored locations. No external downloads,

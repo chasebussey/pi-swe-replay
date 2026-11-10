@@ -5,7 +5,11 @@ export const AGENTLESS_REVISION = "5ce5888b9f149beaace393957a55ea8ee46c9f71";
 export const PYODIDE_VERSION = "314.0.7";
 export const BUNDLED_PYTHON_VERSION = "3.14.2";
 
-// Core/acquisition TSC contracts. Persisted TSC provenance is not supported until P5.
+// TSC producer contracts. Persisted TSC provenance is not supported until P5.
+export const TSC_PATCH_IDENTITY_POLICY = "complete-tree-tsc-mixed-v1";
+export const TSC_HELPER_POLICY = "added-helper-residual-v1";
+export const TSC_SOURCE_FALLBACK_POLICY = "lossless-paired-source-v1";
+export const TSC_FRAMING_POLICY = "tagged-json-arrays-utf8-sha256-v1";
 export const TSC_CANONICALIZATION_POLICY = "tsc-canonical-tree-v1";
 export const TSC_REGISTRY_POLICY = "python-typescript-files-v1";
 export const TSC_GRAMMAR_SOURCE_POLICY = "tree-sitter-github-releases-v1";
@@ -39,6 +43,26 @@ export function tscSourceProvenance(languages: readonly TscLanguage[]) {
   });
 }
 export type TscSourceProvenance = ReturnType<typeof tscSourceProvenance>;
+
+/** Complete-tree producer contract. Persisted compatibility remains a P5 gate. */
+export const TSC_PATCH_PROVENANCE = Object.freeze({
+  policy: TSC_PATCH_IDENTITY_POLICY,
+  canonicalization: TSC_CANONICALIZATION_POLICY,
+  helpers: TSC_HELPER_POLICY,
+  registry: TSC_REGISTRY_POLICY,
+  sourceFallback: TSC_SOURCE_FALLBACK_POLICY,
+  framing: TSC_FRAMING_POLICY,
+  runtime: TSC_RUNTIME_ASSET,
+  grammars: TSC_LANGUAGES,
+});
+export type TscPatchProvenance = typeof TSC_PATCH_PROVENANCE;
+
+export function tscPatchProvenanceFrame(provenance: TscPatchProvenance) {
+  return [provenance.policy, provenance.canonicalization, provenance.helpers, provenance.registry,
+    provenance.sourceFallback, provenance.framing,
+    provenance.runtime.package, provenance.runtime.version, provenance.runtime.sha256,
+    provenance.grammars.map((grammar) => [grammar.language, grammar.package, grammar.version, grammar.sha256] as const)] as const;
+}
 
 export const PYTHON_NORMALIZATION_PROVENANCE = Object.freeze({
   policy: PYTHON_NORMALIZATION_POLICY,

@@ -1,8 +1,9 @@
 # TSC v1 implementation contract (P0)
 
 This specifies the implementation contract, **not selectable TSC voting support**.
-P2 source-level batching/worker support and P3 helper/residual projection are
-implemented; complete-tree/record integration remains future work.
+P2 source-level batching/workers, P3 helper/residual projection and P4 complete-tree
+identities with bounded reads are implemented. Captured-record/voting integration
+and user-facing policy choice remain future work.
 Machine-readable choices/pins: `contract.json`. Test inputs: `source-pairs.json`
 and `helper-pairs.json`. No generated canonical hashes serve as correctness oracles.
 The runtime compatibility owner will remain `normalization-policy.ts`, not these
@@ -211,8 +212,48 @@ post-parse checks, parent validation/allocations, filesystem permissions and Nod
 launch settings are outside such a guarantee. V8 heap guards are supplementary
 and may be affected by host launch flags. Trusted installed implementation code is
 assumed unmodified; parsing input content is distinct from executing those modules.
-P4 must bound workspace reads/candidate/file translation before allocating inputs,
-not rely on the worker after an unbounded blob read. P3 projects trusted canonical
-subtrees from the original classified trees without rewriting/reparsing source;
-P4 must bound and integrate that downstream projection as well as tree identities.
-P4 tree identities and P5/P6 persisted/user policy integration still block automatic voting.
+P4 bounds workspace reads/candidate/file translation before allocating blob inputs,
+not merely after an unbounded read. P3 projects trusted canonical subtrees from the
+original classified trees without rewriting/reparsing source. P4 bounds downstream
+projection and framing too. P5/P6 persisted/user policy integration still blocks
+automatic TSC voting.
+
+## P4 complete-tree producer and operational bounds
+
+`normalizeWorkspacePatches(workspace, base, candidates, { backend: "tsc", ... })`
+selects the TSC producer explicitly. The omitted/`agentless` backend preserves the
+existing Agentless key algorithm and return shape. Unknown backend labels reject;
+no automatic backend substitution occurs. This internal API does not make TSC a
+selectable replay policy or a supported captured normalization provenance yet.
+
+`workspaceResourceProfile` in contract.json freezes tightening-only operational
+caps, independently of successful identity provenance. Candidate counts are checked
+before tree reads; bounded `ls-tree -l -z` output supplies raw paths and blob sizes.
+Tree/path/change counts are checked before blob reads, and source/blob/cumulative
+read caps before `cat-file blob`. Before-read source reservations include potential
+fallbacks/identical shortcuts, both envelopes including missing sources, and a
+conservative generated-ID allowance. Unique source reservations use language plus
+Git blob OID (empty sources share a sentinel); the worker independently deduplicates
+actual bytes by language/SHA-256. Reservations can reject earlier than the source
+API alone; they never change a successful key. Listing overflow is a fatal Git
+`maxBuffer` error; other numeric cap failures identify the limit explicitly.
+
+A single deadline includes all reads, provisioning, offline workers, projection and
+hashing. Bound identity bytes before canonical JSON decoding/helper sorting or exact
+base64 construction, using full input canonical sizes plus conservative framing/name
+slack. These are conservative safety caps validated by boundary/failure tests, not
+production throughput tuning, hard RSS enforcement or a security sandbox. Source
+worker bounds remain independently enforced. No partial patch batch is returned.
+
+The complete-tree result supplies policy/provenance, operational workspace limits,
+per-candidate hashes/empty flags, and at most 32 source fallback diagnostics per
+candidate with an explicit truncation count. Diagnostic paths are raw-path base64.
+Identical raw content may bypass parsing without claiming parse success. A source
+failure on either side selects exact original bytes for both sides; unsupported
+kinds/suffixes stay exact. Metadata remains outside the content component, so an
+empty or documentation-only new file still differs from no file. Canonically
+unchanged content is omitted. Byte-sorted per-path components use
+`[rawPathBase64, beforeModeOrNull, afterModeOrNull, contentOrNull]`; exact content is
+`["exact", beforeValue, afterValue]`, with each value `null`, `["bytes", base64]`,
+or `["object", oid]`. Canonical content uses the D8-B frame above. Neither result
+nor diagnostics provide restoration source. No Git refs/index/worktree are changed.
