@@ -320,3 +320,19 @@ ordinary user stashes untouched unless explicitly asked to apply them.
 Before editing, inspect relevant files and working-tree status. Preserve unrelated
 user changes. After editing, run the type check and relevant tests; report changes,
 actual validation results, known failures, and remaining limitations.
+
+### Decision handling
+
+In implementation plans, distinguish user-level policy choices, agent-owned
+technical decisions, and validation gates deferred to later milestones. Surface
+meaningful policy ambiguities, but resolve ordinary technical details autonomously
+within the agreed scope. Do not leave a milestone blocked solely because a later
+milestone's validation has not run; record the owner and acceptance gate explicitly.
+
+### Multi-session handoffs
+
+Do not rely solely on Git-ignored working notes for continuation. At checkpoints,
+summarize the commit, completed scope, remaining gates, actual validation results,
+and next useful action. Identify which supporting documents are uncommitted or
+ignored. Do not force-add ignored documents or introduce tracked status files
+without approval.
